@@ -107,8 +107,21 @@ public partial class BehaviourView : Page
         if (s.PinClientsToCores) CpuAffinityService.Start(); else CpuAffinityService.Stop();
         RefreshCpuPinning();
 
-        if (turningOnFpsOverlay && !FpsWatcherTaskService.TaskExists())
-            await EnsureFpsWatcherTaskAsync();
+        if (turningOnFpsOverlay)
+        {
+            if (FpsWatcherTaskService.TaskExists())
+            {
+                // Already there from an earlier session - just record that fact so
+                // FpsOverlayCoordinator can trust the cached flag on every future launch instead of
+                // re-querying schtasks itself each time.
+                SettingsService.Current.FpsWatcherTaskConfirmed = true;
+                SettingsService.Save();
+            }
+            else
+            {
+                await EnsureFpsWatcherTaskAsync();
+            }
+        }
 
         if (s.ForceDedicatedGpu)
         {
@@ -143,7 +156,12 @@ public partial class BehaviourView : Page
         if (confirmed)
         {
             var created = await Task.Run(FpsWatcherTaskService.TryCreateTask);
-            if (created) return;
+            if (created)
+            {
+                SettingsService.Current.FpsWatcherTaskConfirmed = true;
+                SettingsService.Save();
+                return;
+            }
             await DialogHelper.ShowErrorAsync(this, "Could not set this up - the FPS overlay won't turn on until you try again.");
         }
 

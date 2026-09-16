@@ -3,33 +3,31 @@ using System.Runtime.InteropServices;
 using Lingstrap.Models;
 using Lingstrap.Services;
 using Vortice.Direct2D1;
-using Vortice.Direct3D;
-using Vortice.Direct3D11;
-using Vortice.DirectComposition;
 using Vortice.DirectWrite;
-using Vortice.DXGI;
 using Color4 = Vortice.Mathematics.Color4;
 
 namespace Lingstrap.Views;
 
 /// <summary>
-/// The FPS chip, rendered through a real DirectX 11 swap chain hosted via DirectComposition rather
-/// than a classic Win32/WPF layered window (AllowsTransparency, UpdateLayeredWindow). That distinction
-/// matters: Roblox uses DXGI's hardware-accelerated "flip model" presentation (confirmed via the
-/// CreateDirectFlipResource/DWMRedirection events RobloxFpsTracker logs while capturing its present
-/// events), and a GDI-based layered window only got recomposited by DWM roughly once a second on top
-/// of that - it isn't part of DWM's fast hardware compositor pipeline the way a proper
-/// DirectComposition-hosted swap chain is. This is a plain Win32 window (not a WPF Window) since WPF
-/// doesn't expose the WS_EX_NOREDIRECTIONBITMAP style DirectComposition needs - created on the
-/// fpswatcher process's existing WPF Dispatcher thread, so its messages still get pumped by that same
-/// thread's already-running message loop with no separate loop needed.
+/// The FPS chip. Two earlier rendering approaches were tried and abandoned:
 ///
-/// Update rate is real but not perfectly consistent: this measurably updates far faster than the
-/// original layered-window version, in bursts close to real frame rate, but Windows' own scheduling
-/// of when it recomposites this window over Roblox's flip-model rendering isn't fully controllable
-/// from here - that ceiling is undocumented OS/DWM behavior, not something more app-side tuning has
-/// reliably improved further (a wider, whole-client-area-covering variant was tried and didn't show a
-/// repeatable improvement over this simpler chip-sized window).
+/// 1. A classic WPF layered window (AllowsTransparency, UpdateLayeredWindow driven by WPF's own
+///    internal render loop) - click-through worked fine, but WPF's own compositing only pushed a
+///    new frame roughly once a second over Roblox's flip-model rendering.
+/// 2. A DirectComposition-hosted D3D11 swap chain (WS_EX_NOREDIRECTIONBITMAP) - fixed the update
+///    rate (real bursts close to actual frame rate), but click-through never worked correctly for
+///    this combination: WS_EX_TRANSPARENT, WM_NCHITTEST/HTTRANSPARENT, and SetWindowRgn (both fully
+///    empty and 1x1) were all tried - the region-based attempts hid the window's rendering
+///    entirely rather than just its hit-testing, and the rest never stopped blocking clicks. This
+///    is a documented, known-hard combination, not something specific to this app.
+///
+/// This version goes back to WS_EX_LAYERED (proven, reliable click-through - the same mechanism
+/// tooltips and cursors use) but pushes frames itself, directly and synchronously, via a raw
+/// UpdateLayeredWindow call every time the FPS value changes, instead of relying on WPF's own
+/// internal render loop to decide when to call it (that scheduling, not UpdateLayeredWindow itself,
+/// was the likely bottleneck the first time around). Direct2D still renders the actual pill/text,
+/// through an ID2D1DCRenderTarget bound to a GDI memory DC instead of a DXGI swap chain - same
+/// drawing calls, different destination.
 /// </summary>
 public sealed class DxFpsOverlayWindow : IDisposable
 {
@@ -39,11 +37,10 @@ public sealed class DxFpsOverlayWindow : IDisposable
     private const float CornerRadius = 10f;
 
     private const uint WS_POPUP = 0x80000000;
-    private const uint WS_VISIBLE = 0x10000000;
     private const uint WS_EX_TOOLWINDOW = 0x00000080;
     private const uint WS_EX_TRANSPARENT = 0x00000020;
     private const uint WS_EX_NOACTIVATE = 0x08000000;
-    private const uint WS_EX_NOREDIRECTIONBITMAP = 0x00200000;
+    private const uint WS_EX_LAYERED = 0x00080000;
     private const uint SWP_NOSIZE = 0x0001;
     private const uint SWP_NOMOVE = 0x0002;
     private const uint SWP_NOACTIVATE = 0x0010;
@@ -51,6 +48,12 @@ public sealed class DxFpsOverlayWindow : IDisposable
     private const uint GW_HWNDPREV = 3;
     private const int SW_HIDE = 0;
     private const int SW_SHOWNOACTIVATE = 4;
+    private const uint WM_NCHITTEST = 0x0084;
+    private const int HTTRANSPARENT = -1;
+    private const uint ULW_ALPHA = 0x00000002;
+    private const byte AC_SRC_OVER = 0x00;
+    private const byte AC_SRC_ALPHA = 0x01;
+    private const uint DIB_RGB_COLORS = 0;
 
     private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 
@@ -69,6 +72,29 @@ public sealed class DxFpsOverlayWindow : IDisposable
         [MarshalAs(UnmanagedType.LPWStr)] public string? lpszMenuName;
         [MarshalAs(UnmanagedType.LPWStr)] public string lpszClassName;
         public IntPtr hIconSm;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT { public int X, Y; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct SIZE { public int cx, cy; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BLENDFUNCTION
+    {
+        public byte BlendOp, BlendFlags, SourceConstantAlpha, AlphaFormat;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct BITMAPINFOHEADER
+    {
+        public uint biSize;
+        public int biWidth, biHeight;
+        public ushort biPlanes, biBitCount;
+        public uint biCompression, biSizeImage;
+        public int biXPelsPerMeter, biYPelsPerMeter;
+        public uint biClrUsed, biClrImportant;
     }
 
     private static class Native
@@ -98,6 +124,31 @@ public sealed class DxFpsOverlayWindow : IDisposable
         [DllImport("user32.dll")]
         public static extern IntPtr GetForegroundWindow();
 
+        [DllImport("user32.dll")]
+        public static extern IntPtr GetDC(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        public static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern bool UpdateLayeredWindow(IntPtr hwnd, IntPtr hdcDst, ref POINT pptDst, ref SIZE psize,
+            IntPtr hdcSrc, ref POINT pptSrc, int crKey, ref BLENDFUNCTION pblend, uint dwFlags);
+
+        [DllImport("gdi32.dll")]
+        public static extern IntPtr CreateCompatibleDC(IntPtr hdc);
+
+        [DllImport("gdi32.dll")]
+        public static extern IntPtr CreateDIBSection(IntPtr hdc, ref BITMAPINFOHEADER pbmi, uint usage, out IntPtr ppvBits, IntPtr hSection, uint offset);
+
+        [DllImport("gdi32.dll")]
+        public static extern IntPtr SelectObject(IntPtr hdc, IntPtr hObject);
+
+        [DllImport("gdi32.dll")]
+        public static extern bool DeleteObject(IntPtr hObject);
+
+        [DllImport("gdi32.dll")]
+        public static extern bool DeleteDC(IntPtr hdc);
+
         [DllImport("kernel32.dll")]
         public static extern IntPtr GetModuleHandle(string? lpModuleName);
     }
@@ -105,13 +156,11 @@ public sealed class DxFpsOverlayWindow : IDisposable
     private readonly WndProcDelegate _wndProc;
     private readonly IntPtr _robloxHwnd;
     private IntPtr _hwnd;
+    private IntPtr _memDc;
+    private IntPtr _dibBitmap;
+    private IntPtr _oldBitmap;
 
-    private ID3D11Device _device = null!;
-    private IDXGISwapChain1 _swapChain = null!;
-    private IDCompositionDevice _dcompDevice = null!;
-    private IDCompositionTarget _dcompTarget = null!;
-    private IDCompositionVisual _dcompVisual = null!;
-    private ID2D1RenderTarget _renderTarget = null!;
+    private ID2D1DCRenderTarget _renderTarget = null!;
     private IDWriteTextFormat _textFormat = null!;
     private ID2D1SolidColorBrush _textBrush = null!;
     private ID2D1SolidColorBrush _backgroundBrush = null!;
@@ -132,6 +181,7 @@ public sealed class DxFpsOverlayWindow : IDisposable
         ApplyAppearance();
         Render();
         PlaceAboveRoblox();
+        Native.ShowWindow(_hwnd, SW_SHOWNOACTIVATE);
     }
 
     private void CreateNativeWindow()
@@ -149,50 +199,48 @@ public sealed class DxFpsOverlayWindow : IDisposable
         };
         Native.RegisterClassEx(ref wc);
 
-        const uint exStyle = WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_NOREDIRECTIONBITMAP;
-        _hwnd = Native.CreateWindowEx(exStyle, className, "Lingstrap FPS", WS_POPUP | WS_VISIBLE,
+        // WS_EX_LAYERED, not WS_EX_NOREDIRECTIONBITMAP - proven, reliable click-through (the same
+        // mechanism tooltips and custom cursors use), unlike the DirectComposition-hosted version
+        // this replaces. No WS_VISIBLE here - UpdateLayeredWindow itself is what actually shows the
+        // window's content; there's nothing to show until the first Render() call below.
+        const uint exStyle = WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_LAYERED;
+        _hwnd = Native.CreateWindowEx(exStyle, className, "Lingstrap FPS", WS_POPUP,
             Margin, Margin, WidthPx, HeightPx, IntPtr.Zero, IntPtr.Zero, hInstance, IntPtr.Zero);
     }
 
-    private IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam) =>
-        Native.DefWindowProc(hWnd, msg, wParam, lParam);
+    /// <summary>Belt-and-suspenders alongside WS_EX_TRANSPARENT - answering WM_NCHITTEST directly
+    /// is the standard extra step for click-through, and unlike the DirectComposition version, a
+    /// plain WS_EX_LAYERED window actually honors this.</summary>
+    private IntPtr WndProc(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
+    {
+        if (msg == WM_NCHITTEST) return new IntPtr(HTTRANSPARENT);
+        return Native.DefWindowProc(hWnd, msg, wParam, lParam);
+    }
 
     private void InitializeGraphics()
     {
-        D3D11.D3D11CreateDevice(null, DriverType.Hardware, DeviceCreationFlags.BgraSupport,
-            new[] { Vortice.Direct3D.FeatureLevel.Level_11_0, Vortice.Direct3D.FeatureLevel.Level_10_1, Vortice.Direct3D.FeatureLevel.Level_10_0 },
-            out _device).CheckError();
-
-        using var dxgiDevice = _device.QueryInterface<IDXGIDevice>();
-        using var adapter = dxgiDevice.GetAdapter();
-        using var factory = adapter.GetParent<IDXGIFactory2>();
-
-        var swapChainDesc = new SwapChainDescription1
+        // A 32bpp top-down (negative height) DIB section - CPU/GDI-accessible memory that both
+        // Direct2D (via BindDC below) and UpdateLayeredWindow can read the same pixels from.
+        var bmi = new BITMAPINFOHEADER
         {
-            Width = WidthPx,
-            Height = HeightPx,
-            Format = Format.B8G8R8A8_UNorm,
-            Stereo = false,
-            SampleDescription = new SampleDescription(1, 0),
-            BufferUsage = Usage.RenderTargetOutput,
-            BufferCount = 2,
-            Scaling = Scaling.Stretch,
-            SwapEffect = SwapEffect.FlipSequential,
-            AlphaMode = Vortice.DXGI.AlphaMode.Premultiplied,
+            biSize = (uint)Marshal.SizeOf<BITMAPINFOHEADER>(),
+            biWidth = WidthPx,
+            biHeight = -HeightPx,
+            biPlanes = 1,
+            biBitCount = 32,
+            biCompression = 0, // BI_RGB
         };
-        _swapChain = factory.CreateSwapChainForComposition(_device, swapChainDesc, null);
 
-        DComp.DCompositionCreateDevice(dxgiDevice, out _dcompDevice).CheckError();
-        _dcompDevice.CreateTargetForHwnd(_hwnd, true, out _dcompTarget).CheckError();
-        _dcompDevice.CreateVisual(out _dcompVisual).CheckError();
-        _dcompVisual.SetContent(_swapChain);
-        _dcompTarget.SetRoot(_dcompVisual);
-        _dcompDevice.Commit();
+        var screenDc = Native.GetDC(IntPtr.Zero);
+        _memDc = Native.CreateCompatibleDC(screenDc);
+        _dibBitmap = Native.CreateDIBSection(screenDc, ref bmi, DIB_RGB_COLORS, out _, IntPtr.Zero, 0);
+        Native.ReleaseDC(IntPtr.Zero, screenDc);
+        _oldBitmap = Native.SelectObject(_memDc, _dibBitmap);
 
         using var d2dFactory = D2D1.D2D1CreateFactory<ID2D1Factory>(Vortice.Direct2D1.FactoryType.SingleThreaded);
-        using var surface = _swapChain.GetBuffer<IDXGISurface>(0);
-        var rtProps = new RenderTargetProperties(new Vortice.DCommon.PixelFormat(Format.B8G8R8A8_UNorm, Vortice.DCommon.AlphaMode.Premultiplied));
-        _renderTarget = d2dFactory.CreateDxgiSurfaceRenderTarget(surface, rtProps);
+        var rtProps = new RenderTargetProperties(new Vortice.DCommon.PixelFormat(Vortice.DXGI.Format.B8G8R8A8_UNorm, Vortice.DCommon.AlphaMode.Premultiplied));
+        _renderTarget = d2dFactory.CreateDCRenderTarget(rtProps);
+        _renderTarget.BindDC(_memDc, new System.Drawing.Rectangle(0, 0, WidthPx, HeightPx));
 
         var dwriteFactory = DWrite.DWriteCreateFactory<IDWriteFactory>(Vortice.DirectWrite.FactoryType.Shared);
         _textFormat = dwriteFactory.CreateTextFormat("Segoe UI", FontWeight.Bold, Vortice.DirectWrite.FontStyle.Normal, FontStretch.Normal, 18);
@@ -215,11 +263,6 @@ public sealed class DxFpsOverlayWindow : IDisposable
         var accent = accentTheme.Base;
         var isLight = SettingsService.Current.LightTheme;
 
-        // The number itself is plain white/near-black (not the accent) - against a background as
-        // busy and varied as a live game, an accent-colored number was hard to read at a glance;
-        // white (or near-black on the light theme) keeps solid contrast against the pill's own
-        // fixed dark/light background regardless of what's behind the overlay. The accent still
-        // comes through in the pill's border, so it isn't lost, just no longer carried by the text.
         _textBrush.Color = isLight ? new Color4(0.106f, 0.106f, 0.122f, 1f) : new Color4(1f, 1f, 1f, 1f);
         _backgroundBrush.Color = isLight
             ? new Color4(1f, 1f, 1f, 0.85f)
@@ -233,12 +276,18 @@ public sealed class DxFpsOverlayWindow : IDisposable
         Render();
     }
 
+    /// <summary>
+    /// Renders with Direct2D exactly as before, then pushes the result to the screen directly via
+    /// UpdateLayeredWindow - a synchronous, immediate push rather than waiting for WPF's own render
+    /// loop or DWM's own compositing schedule to get around to it, which is what made both earlier
+    /// approaches update too slowly over Roblox's flip-model rendering.
+    /// </summary>
     private void Render()
     {
         _renderTarget.BeginDraw();
         _renderTarget.Clear(null); // fully transparent outside the pill - premultiplied alpha
 
-        var pillRect = new Vortice.Direct2D1.RoundedRectangle
+        var pillRect = new RoundedRectangle
         {
             Rect = new Vortice.Mathematics.Rect(1, 1, WidthPx - 2, HeightPx - 2),
             RadiusX = CornerRadius,
@@ -249,18 +298,22 @@ public sealed class DxFpsOverlayWindow : IDisposable
         _renderTarget.DrawText(_currentText, _textFormat, new Vortice.Mathematics.Rect(0, 0, WidthPx, HeightPx), _textBrush);
 
         _renderTarget.EndDraw();
-        // Sync interval 0 - don't block this thread waiting for DWM's next composition opportunity.
-        _swapChain.Present(0, PresentFlags.None);
+
+        var size = new SIZE { cx = WidthPx, cy = HeightPx };
+        var sourcePoint = new POINT { X = 0, Y = 0 };
+        var destPoint = new POINT { X = (int)Left, Y = (int)Top };
+        var blend = new BLENDFUNCTION { BlendOp = AC_SRC_OVER, SourceConstantAlpha = 255, AlphaFormat = AC_SRC_ALPHA };
+
+        Native.UpdateLayeredWindow(_hwnd, IntPtr.Zero, ref destPoint, ref size, _memDc, ref sourcePoint, 0, ref blend, ULW_ALPHA);
     }
 
-    /// <summary>
-    /// Places this window directly above Roblox in the z-order (not Topmost, which would float it
-    /// above the whole desktop) - the same technique OverlayBannerWindow uses. This needs to be
-    /// re-asserted continuously (see StartFollowing below), not just once at creation - restoring
-    /// Roblox from being minimized, or it entering (borderless) fullscreen, both change the overall
-    /// window stacking order and would otherwise silently leave this window buried behind Roblox
-    /// again with no error or event to react to.
-    /// </summary>
+    private double Left, Top;
+
+    /// <summary>Places this window directly above Roblox in the z-order (not Topmost, which would
+    /// float it above the whole desktop) - the same technique OverlayBannerWindow uses. Re-asserted
+    /// whenever Roblox's rect or foreground state changes (see StartFollowing) - restoring from
+    /// minimized, moving, (borderless) fullscreen, and alt-tabbing a fullscreen Roblox can all bump
+    /// it back above this window in the stacking order.</summary>
     private void PlaceAboveRoblox()
     {
         if (_robloxHwnd == IntPtr.Zero) return;
@@ -269,17 +322,19 @@ public sealed class DxFpsOverlayWindow : IDisposable
     }
 
     /// <summary>Pins the chip to whichever corner of the Roblox window the user picked. Plain screen
-    /// pixel coordinates - no WPF DIU/DPI conversion needed for a raw Win32 window.</summary>
+    /// pixel coordinates - no WPF DIU/DPI conversion needed for a raw Win32 window. Doesn't move the
+    /// actual window via SetWindowPos - UpdateLayeredWindow (see Render) both positions and paints
+    /// it in one call, so the new position only visibly takes effect on the next render.</summary>
     public void Reposition(System.Windows.Rect robloxRect)
     {
-        var (x, y) = SettingsService.Current.FpsOverlayPosition switch
+        (Left, Top) = SettingsService.Current.FpsOverlayPosition switch
         {
             FpsOverlayPosition.TopLeft => (robloxRect.Left + Margin, robloxRect.Top + Margin),
             FpsOverlayPosition.TopRight => (robloxRect.Right - WidthPx - Margin, robloxRect.Top + Margin),
             FpsOverlayPosition.BottomLeft => (robloxRect.Left + Margin, robloxRect.Bottom - HeightPx - Margin),
             _ => (robloxRect.Right - WidthPx - Margin, robloxRect.Bottom - HeightPx - Margin),
         };
-        Native.SetWindowPos(_hwnd, IntPtr.Zero, (int)x, (int)y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        Render();
     }
 
     /// <summary>
@@ -287,16 +342,7 @@ public sealed class DxFpsOverlayWindow : IDisposable
     /// OverlayBannerWindow's own follow timer - reuses the WPF Dispatcher already running on this
     /// thread purely for its timer/thread-marshaling machinery, not for any rendering. Also hides
     /// this window whenever Roblox itself isn't currently visible (minimized) rather than leaving it
-    /// floating alone at its last position, and re-asserts z-order (see PlaceAboveRoblox) whenever
-    /// Roblox's rect changes OR its foreground/focus state changes - restoring from minimized,
-    /// moving the window, entering/leaving (borderless) fullscreen, and alt-tabbing away from and
-    /// back to a fullscreen Roblox can all bump it back above this window in the stacking order, and
-    /// the focus-only case in particular changes neither position nor size, so the rect check alone
-    /// doesn't catch it. Deliberately NOT done unconditionally on every tick either way - that was
-    /// tried first and made Roblox's own fullscreen-detection logic think a window kept appearing
-    /// above it over and over, 60 times a second, which made ROBLOX ITSELF visibly flicker in and
-    /// out of fullscreen on its own. Only re-asserting on an actual change keeps this to real,
-    /// occasional events instead of a continuous fight over z-order.
+    /// floating alone at its last position.
     /// </summary>
     public void StartFollowing()
     {
@@ -342,11 +388,12 @@ public sealed class DxFpsOverlayWindow : IDisposable
         _textBrush?.Dispose();
         _textFormat?.Dispose();
         _renderTarget?.Dispose();
-        _dcompVisual?.Dispose();
-        _dcompTarget?.Dispose();
-        _dcompDevice?.Dispose();
-        _swapChain?.Dispose();
-        _device?.Dispose();
+        if (_memDc != IntPtr.Zero)
+        {
+            Native.SelectObject(_memDc, _oldBitmap);
+            Native.DeleteDC(_memDc);
+        }
+        if (_dibBitmap != IntPtr.Zero) Native.DeleteObject(_dibBitmap);
         if (_hwnd != IntPtr.Zero) Native.DestroyWindow(_hwnd);
     }
 }

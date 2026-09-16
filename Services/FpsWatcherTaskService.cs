@@ -22,12 +22,17 @@ public static class FpsWatcherTaskService
     {
         try
         {
+            // Deliberately NOT redirecting stdout/stderr - only the exit code matters here, and
+            // redirecting a stream without ever reading it is a well-known way to hang: schtasks
+            // blocks trying to write once the OS pipe buffer fills, WaitForExit then waits on a
+            // process that's stuck waiting on us, and this ran on every single launch whenever the
+            // FPS overlay was enabled - exactly the kind of intermittent, launch-slowing hang that
+            // showed up as "waiting for Roblox takes a long time" with no error or log line to
+            // explain why.
             var process = Process.Start(new ProcessStartInfo("schtasks.exe", $"/query /tn \"{TaskName}\"")
             {
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
             });
             process!.WaitForExit();
             return process.ExitCode == 0;

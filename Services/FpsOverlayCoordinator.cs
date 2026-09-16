@@ -32,16 +32,27 @@ public static class FpsOverlayCoordinator
         [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
     }
 
-    /// <summary>Call once Roblox's client process has started.</summary>
+    /// <summary>Call once Roblox's client process has started. Trusts the cached
+    /// FpsWatcherTaskConfirmed flag rather than re-querying "schtasks /query" here every single
+    /// launch - that extra process spawn was adding real time to every launch for a fact that's
+    /// already known once the task has been created successfully. Falls back to one real check (and
+    /// caches the result if it passes) for anyone whose task already existed from before this flag
+    /// existed at all, so upgrading doesn't silently turn the overlay off for them.</summary>
     public static void OnRobloxStarted()
     {
         if (!SettingsService.Current.ShowFpsOverlay) return;
 
-        if (!FpsWatcherTaskService.TaskExists())
+        if (!SettingsService.Current.FpsWatcherTaskConfirmed)
         {
-            Log.Warn("FPS overlay: scheduled task isn't set up yet - skipping this launch. Toggle " +
-                     "\"Show FPS while Roblox is running\" off and back on from the Behaviour page to set it up.");
-            return;
+            if (!FpsWatcherTaskService.TaskExists())
+            {
+                Log.Warn("FPS overlay: scheduled task isn't set up yet - skipping this launch. Toggle " +
+                         "\"Show FPS while Roblox is running\" off and back on from the Behaviour page to set it up.");
+                return;
+            }
+
+            SettingsService.Current.FpsWatcherTaskConfirmed = true;
+            SettingsService.Save();
         }
 
         FpsWatcherTaskService.RunTask();

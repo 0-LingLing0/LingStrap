@@ -107,6 +107,11 @@ public class LingstrapSettings
     /// prompt on launch without asking for this.</summary>
     public bool ShowFpsOverlay { get; set; } = false;
     public FpsOverlayPosition FpsOverlayPosition { get; set; } = FpsOverlayPosition.TopRight;
+    /// <summary>Set once FpsWatcherTaskService.TryCreateTask() succeeds, so OnRobloxStarted can skip
+    /// spawning "schtasks /query" on every single launch just to re-confirm something already known -
+    /// that extra process spawn (even a fast, non-hanging one) was adding to launch time for no
+    /// benefit on the overwhelmingly common case where the task is already there.</summary>
+    public bool FpsWatcherTaskConfirmed { get; set; } = false;
 }
 
 public enum UpdateCheckMode { Off, Notify, AutoInstall }

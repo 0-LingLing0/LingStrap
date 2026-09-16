@@ -33,13 +33,15 @@
 
         <StackPanel x:Name="ScalePanel" Margin="0,10,0,0" Visibility="Collapsed">
             <TextBlock Text="Size" FontSize="11" Opacity="0.65" HorizontalAlignment="Center" />
-            <!-- The slider's own thumb has width, so its center (not its edge) is what reaches the
-                 track's end at Minimum/Maximum - left as-is, that leaves a visible gap between the
-                 thumb and this column's true edge at either extreme. The negative left/right margin
-                 extends the track slightly past the column bounds so the thumb's outer edge actually
-                 reaches it instead. -->
+            <!-- WPF-UI's own Slider template has the track flush with the control's bounds (zero
+                 inset) and a 20x20 thumb - by the standard WPF Track layout, that means the thumb's
+                 outer edge (not just its center) already reaches the true left/right bounds exactly
+                 at Minimum/Maximum, no gap and no overshoot, PROVIDED the control actually stretches
+                 to fill this column - explicit HorizontalAlignment="Stretch" makes sure of that
+                 instead of leaving it to whatever the control's own default happens to be. -->
             <Slider x:Name="ScaleSlider" Minimum="25" Maximum="200" SmallChange="1" LargeChange="10"
-                    IsSnapToTickEnabled="True" TickFrequency="1" Padding="0" Margin="-14,2,-14,0"
+                    IsSnapToTickEnabled="True" TickFrequency="1" Margin="0,2,0,0"
+                    HorizontalAlignment="Stretch"
                     ValueChanged="ScaleSlider_ValueChanged" />
             <TextBlock x:Name="ScaleSizeText" FontSize="11" Opacity="0.65" HorizontalAlignment="Center" Margin="0,2,0,0" />
         </StackPanel>
