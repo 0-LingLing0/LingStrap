@@ -22,6 +22,11 @@ public partial class AboutView : Page
         Process.Start(new ProcessStartInfo { FileName = Paths.Logs, UseShellExecute = true });
     }
 
+    private void OpenGitHub_Click(object sender, RoutedEventArgs e)
+    {
+        Process.Start(new ProcessStartInfo { FileName = "https://github.com/0-LingLing0/LingStrap", UseShellExecute = true });
+    }
+
     private async void ForceCleanReinstall_Click(object sender, RoutedEventArgs e)
     {
         var confirmed = await DialogHelper.ShowConfirmAsync(this,

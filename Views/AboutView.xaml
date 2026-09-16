@@ -28,9 +28,12 @@
                 <ui:Button Content="Delete install" Click="ForceCleanReinstall_Click" VerticalAlignment="Center" />
             </ui:CardControl>
 
-            <ui:CardControl IsHitTestVisible="False">
-                <TextBlock Style="{StaticResource Body}" Opacity="0.7" TextWrapping="Wrap"
-                           Text="Not affiliated with Roblox Corporation. Modifying your own client is your own risk - especially multi-instance, which Roblox does not support." />
+            <ui:CardControl Margin="0,0,0,8">
+                <ui:CardControl.Header>
+                    <TextBlock Style="{StaticResource Body}" Opacity="0.7" TextWrapping="Wrap" MaxWidth="450"
+                               Text="Not affiliated with Roblox Corporation. Modifying your own client is your own risk - especially multi-instance, which Roblox does not support." />
+                </ui:CardControl.Header>
+                <ui:Button Content="View on GitHub" Click="OpenGitHub_Click" VerticalAlignment="Center" />
             </ui:CardControl>
     </StackPanel>
 </Page>
