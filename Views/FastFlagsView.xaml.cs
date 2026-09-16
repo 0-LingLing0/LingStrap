@@ -28,7 +28,7 @@ public partial class FastFlagsView : Page
         LoadIntRow(FastFlagCatalog.GrassMaxDistance, GrassMaxToggle, GrassMaxBox, 0);
         LoadIntRow(FastFlagCatalog.GrassMovement, GrassMovementToggle, GrassMovementBox, 0);
         LoadBoolRow(FastFlagCatalog.FreezeVoxelLighting, FreezeVoxelToggle);
-        LoadBoolRow(FastFlagCatalog.GreySky, GreySkyToggle);
+        LoadBoolRow(FastFlagCatalog.SkyGray, SkyGrayToggle);
         LoadBoolRow(FastFlagCatalog.DisableDpiScaling, DisableDpiToggle);
         LoadRenderer();
         LoadLowPoly();
@@ -37,7 +37,7 @@ public partial class FastFlagsView : Page
         _loading = false;
     }
 
-    // ---- pure bool rows (Freeze voxel lighting, Grey sky, Disable DPI scaling, Alt+Enter fullscreen) ----
+    // ---- pure bool rows (Freeze voxel lighting, Gray sky, Disable DPI scaling, Alt+Enter fullscreen) ----
 
     private static void LoadBoolRow(string flagName, ToggleSwitch toggle) =>
         toggle.IsChecked = FastFlagStore.Find(flagName) != null;
@@ -54,10 +54,10 @@ public partial class FastFlagsView : Page
         SaveBoolRow(FastFlagCatalog.FreezeVoxelLighting, FreezeVoxelToggle);
     }
 
-    private void GreySkyToggle_Changed(object sender, System.Windows.RoutedEventArgs e)
+    private void SkyGrayToggle_Changed(object sender, System.Windows.RoutedEventArgs e)
     {
         if (_loading) return;
-        SaveBoolRow(FastFlagCatalog.GreySky, GreySkyToggle);
+        SaveBoolRow(FastFlagCatalog.SkyGray, SkyGrayToggle);
     }
 
     private void DisableDpiToggle_Changed(object sender, System.Windows.RoutedEventArgs e)

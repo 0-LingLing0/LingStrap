@@ -17,11 +17,30 @@
                 <StackPanel>
                     <TextBlock Text="Light theme" Style="{StaticResource Body}" FontWeight="SemiBold" />
                     <TextBlock Style="{StaticResource Sub}" Margin="0,4,0,0" MaxWidth="450"
-                               Text="Switches from the default dark look to a light one. Restarts Lingstrap to apply." />
+                               Text="Switches from the default dark look to a light one." />
                 </StackPanel>
             </ui:CardControl.Header>
-            <ui:ToggleSwitch x:Name="LightThemeToggle" Checked="LightThemeToggle_Changed" Unchecked="LightThemeToggle_Changed" />
+            <ui:ToggleSwitch x:Name="LightThemeToggle" Checked="PendingSetting_Changed" Unchecked="PendingSetting_Changed" />
         </ui:CardControl>
+
+        <TextBlock Text="Preview" Style="{StaticResource Body}" FontWeight="SemiBold" Margin="0,4,0,8" />
+        <Border x:Name="PreviewSurface" CornerRadius="8" Padding="20" BorderThickness="1"
+                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" Margin="0,0,0,8">
+            <StackPanel>
+                <TextBlock x:Name="PreviewText" Text="This is what Lingstrap will look like." FontWeight="SemiBold" Margin="0,0,0,14" />
+                <StackPanel Orientation="Horizontal">
+                    <Border x:Name="PreviewButton" CornerRadius="4" Padding="16,8" Margin="0,0,14,0">
+                        <TextBlock Text="Sample button" Foreground="White" FontSize="13" FontWeight="SemiBold" />
+                    </Border>
+                    <Border x:Name="PreviewToggleTrack" Width="40" Height="20" CornerRadius="10" VerticalAlignment="Center">
+                        <Ellipse Width="14" Height="14" Fill="White" HorizontalAlignment="Right" Margin="0,0,3,0" />
+                    </Border>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <ui:Button x:Name="ApplyButton" Content="Apply and restart" Appearance="Primary" Margin="0,0,0,20"
+                   HorizontalAlignment="Left" IsEnabled="False" Click="Apply_Click" />
 
         <ui:CardControl Margin="0,0,0,8">
             <ui:CardControl.Header>

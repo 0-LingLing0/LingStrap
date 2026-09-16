@@ -96,6 +96,16 @@ public class LingstrapSettings
     /// <summary>The newest version the update-available dialog has already been shown for, so a
     /// found update is only ever announced once instead of nagging on every single launch.</summary>
     public string? LastSeenUpdateVersion { get; set; }
+
+    // --- Diagnostics -----------------------------------------------------
+    /// <summary>Shows a small always-on-top FPS counter over the Roblox window while it's running.
+    /// Needs its own elevated helper process (see FpsOverlayCoordinator) since the real-time ETW
+    /// session behind it requires administrator rights - off by default so nobody gets a surprise UAC
+    /// prompt on launch without asking for this.</summary>
+    public bool ShowFpsOverlay { get; set; } = false;
+    public FpsOverlayPosition FpsOverlayPosition { get; set; } = FpsOverlayPosition.TopRight;
 }
 
 public enum UpdateCheckMode { Off, Notify, AutoInstall }
+
+public enum FpsOverlayPosition { TopLeft, TopRight, BottomLeft, BottomRight }

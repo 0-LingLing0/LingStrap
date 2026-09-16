@@ -29,6 +29,8 @@ public partial class BehaviourView : Page
         ChkServerLocation.IsChecked = s.ShowServerLocation;
         ChkNotification.IsChecked   = s.ShowServerNotification;
         ChkDiscord.IsChecked        = s.DiscordRichPresence;
+        ChkFpsOverlay.IsChecked     = s.ShowFpsOverlay;
+        FpsPositionCombo.SelectedIndex = (int)s.FpsOverlayPosition;
 
         BannerDurationSlider.Value = s.OverlayBannerSeconds;
         BannerDurationBox.Value = s.OverlayBannerSeconds;
@@ -78,11 +80,13 @@ public partial class BehaviourView : Page
         }
     }
 
-    private void Setting_Changed(object sender, RoutedEventArgs e)
+    private async void Setting_Changed(object sender, RoutedEventArgs e)
     {
         if (_loading) return;
 
         var s = SettingsService.Current;
+        var turningOnFpsOverlay = ChkFpsOverlay.IsChecked == true && !s.ShowFpsOverlay;
+
         s.MultiInstance           = ChkMulti.IsChecked == true;
         s.CloseCrashHandler       = ChkCrashHandler.IsChecked == true;
         s.ForceDedicatedGpu       = ChkDedicatedGpu.IsChecked == true;
@@ -92,6 +96,7 @@ public partial class BehaviourView : Page
         s.ShowServerLocation      = ChkServerLocation.IsChecked == true;
         s.ShowServerNotification  = ChkNotification.IsChecked == true;
         s.DiscordRichPresence     = ChkDiscord.IsChecked == true;
+        s.ShowFpsOverlay          = ChkFpsOverlay.IsChecked == true;
 
         SettingsService.Save();
 
@@ -99,6 +104,9 @@ public partial class BehaviourView : Page
         if (s.DiscordRichPresence) DiscordPresenceService.Start(); else DiscordPresenceService.Stop();
         if (s.PinClientsToCores) CpuAffinityService.Start(); else CpuAffinityService.Stop();
         RefreshCpuPinning();
+
+        if (turningOnFpsOverlay && !FpsWatcherTaskService.TaskExists())
+            await EnsureFpsWatcherTaskAsync();
 
         if (s.ForceDedicatedGpu)
         {
@@ -109,6 +117,37 @@ public partial class BehaviourView : Page
         {
             GpuPreferenceService.RemoveAllManaged();
         }
+    }
+
+    private void FpsPositionCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading) return;
+        SettingsService.Current.FpsOverlayPosition = (FpsOverlayPosition)FpsPositionCombo.SelectedIndex;
+        SettingsService.Save();
+    }
+
+    /// <summary>One-time setup for the FPS overlay's scheduled task (see FpsWatcherTaskService) - a
+    /// single admin approval now instead of a fresh UAC prompt every time Roblox launches
+    /// afterwards. Turns the toggle back off if the user declines or setup otherwise fails, so the
+    /// setting doesn't end up on with nothing actually working behind it.</summary>
+    private async Task EnsureFpsWatcherTaskAsync()
+    {
+        var confirmed = await DialogHelper.ShowConfirmAsync(this,
+            "This needs a one-time setup step so the FPS overlay can run with administrator rights " +
+            "every time Roblox launches, without asking again after this. Windows will ask you to " +
+            "approve running as administrator just this once.",
+            "Set up the FPS overlay?", confirmText: "Continue");
+
+        if (confirmed)
+        {
+            var created = await Task.Run(FpsWatcherTaskService.TryCreateTask);
+            if (created) return;
+            await DialogHelper.ShowErrorAsync(this, "Could not set this up - the FPS overlay won't turn on until you try again.");
+        }
+
+        ChkFpsOverlay.IsChecked = false;
+        SettingsService.Current.ShowFpsOverlay = false;
+        SettingsService.Save();
     }
 
     // ---- overlay banner duration (slider + type-in box, bounded 1-10 seconds) ----

@@ -9,7 +9,7 @@
         ExtendsContentIntoTitleBar="True"
         WindowBackdropType="Mica">
 
-    <Grid>
+    <Grid x:Name="RootGrid">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />

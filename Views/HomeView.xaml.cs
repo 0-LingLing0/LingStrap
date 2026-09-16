@@ -25,11 +25,16 @@ public partial class HomeView : Page
     }
 
     /// <summary>Tints the hero card's corner glow and gradient start to the current accent - a faint
-    /// echo of the loading screen's own icon halo, so the two don't feel like unrelated designs.</summary>
+    /// echo of the loading screen's own icon halo, so the two don't feel like unrelated designs. The
+    /// gradient's far end used to be a hardcoded dark navy, which looked fine on the default dark
+    /// theme but left this card a jarring dark patch against a white page once light theme shipped -
+    /// it now matches whichever theme is actually active instead.</summary>
     private void ColorHero()
     {
         var accent = ColorThemeCatalog.CurrentAccentColor();
-        HeroGradientStart.Color = Color.FromArgb(0x33, accent.R, accent.G, accent.B);
+        var isLight = SettingsService.Current.LightTheme;
+        HeroGradientStart.Color = Color.FromArgb(isLight ? (byte)0x40 : (byte)0x33, accent.R, accent.G, accent.B);
+        HeroGradientEnd.Color = isLight ? Color.FromRgb(0xFF, 0xFF, 0xFF) : Color.FromRgb(0x23, 0x25, 0x2F);
         HeroGlow.Fill = new SolidColorBrush(Color.FromArgb(0x30, accent.R, accent.G, accent.B));
     }
 

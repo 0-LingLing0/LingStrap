@@ -189,5 +189,40 @@
                 </ui:CardControl.Header>
                 <ui:ToggleSwitch x:Name="ChkDiscord" Checked="Setting_Changed" Unchecked="Setting_Changed" />
             </ui:CardControl>
+
+            <TextBlock Text="Diagnostics" Style="{StaticResource SectionHeader}" />
+
+            <ui:CardExpander Margin="0,0,0,8">
+                <ui:CardExpander.Icon>
+                    <ui:SymbolIcon Symbol="TopSpeed24" />
+                </ui:CardExpander.Icon>
+                <ui:CardExpander.Header>
+                    <TextBlock Text="FPS overlay" Style="{StaticResource Body}" FontWeight="SemiBold" FontSize="15" />
+                </ui:CardExpander.Header>
+                <StackPanel>
+                    <ui:CardControl Margin="0,0,0,8">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <TextBlock Text="Show FPS while Roblox is running" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                                <TextBlock Style="{StaticResource Sub}" Margin="0,4,0,0" MaxWidth="450"
+                                           Text="Measures the real frame rate from outside the process (the same technique tools like RTSS use) rather than reading anything from it. That measurement needs administrator rights, so turning this on asks you to approve that once - never again after that." />
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ui:ToggleSwitch x:Name="ChkFpsOverlay" Checked="Setting_Changed" Unchecked="Setting_Changed" />
+                    </ui:CardControl>
+
+                    <ui:CardControl Margin="0,0,0,8">
+                        <ui:CardControl.Header>
+                            <TextBlock Text="Position" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                        </ui:CardControl.Header>
+                        <ComboBox x:Name="FpsPositionCombo" Width="140" SelectionChanged="FpsPositionCombo_SelectionChanged">
+                            <ComboBoxItem Content="Top left" />
+                            <ComboBoxItem Content="Top right" />
+                            <ComboBoxItem Content="Bottom left" />
+                            <ComboBoxItem Content="Bottom right" />
+                        </ComboBox>
+                    </ui:CardControl>
+                </StackPanel>
+            </ui:CardExpander>
     </StackPanel>
 </Page>

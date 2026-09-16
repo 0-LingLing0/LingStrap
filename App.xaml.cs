@@ -27,6 +27,18 @@ public partial class App : Application
     /// </summary>
     private static bool _isWatcherMode;
 
+    /// <summary>Set when this process was launched by AppearanceView's Apply-triggered restart
+    /// (-windowpos:left,top) - the old window's screen position, so the replacement reopens in the
+    /// same spot instead of the XAML-default centered placement if the user had moved it. Also used
+    /// as the signal that this is that kind of restart, so MainWindow lands back on the Appearance
+    /// page instead of Home.</summary>
+    public static System.Windows.Point? WindowPositionOverride { get; private set; }
+
+    /// <summary>Set alongside WindowPositionOverride (-windowsize:width,height) - the old window's
+    /// size, so the replacement reopens at the same size instead of snapping back to the XAML-default
+    /// dimensions if the user had resized it.</summary>
+    public static System.Windows.Size? WindowSizeOverride { get; private set; }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -43,6 +55,30 @@ public partial class App : Application
         LaunchArgs = e.Args;
         IsRobloxLaunch = LaunchArgs.Length > 0 &&
                          LaunchArgs[0].StartsWith("roblox", StringComparison.OrdinalIgnoreCase);
+
+        foreach (var arg in LaunchArgs)
+        {
+            if (arg.StartsWith("-windowpos:", StringComparison.OrdinalIgnoreCase))
+            {
+                var parts = arg["-windowpos:".Length..].Split(',');
+                if (parts.Length == 2
+                    && double.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var left)
+                    && double.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var top))
+                {
+                    WindowPositionOverride = new System.Windows.Point(left, top);
+                }
+            }
+            else if (arg.StartsWith("-windowsize:", StringComparison.OrdinalIgnoreCase))
+            {
+                var parts = arg["-windowsize:".Length..].Split(',');
+                if (parts.Length == 2
+                    && double.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var width)
+                    && double.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var height))
+                {
+                    WindowSizeOverride = new System.Windows.Size(width, height);
+                }
+            }
+        }
 
         Paths.EnsureCreated();
         Log.Info($"Lingstrap starting. args=[{string.Join(' ', LaunchArgs)}]");
@@ -99,6 +135,16 @@ public partial class App : Application
             // keeps it alive with no MainWindow). StartDetachedWatcher's own timer calls Shutdown()
             // once every Roblox client has closed.
             if (!ActivityCoordinator.StartDetachedWatcher())
+                Shutdown();
+            return;
+        }
+
+        if (LaunchArgs.Length > 0 && LaunchArgs[0].Equals("-fpswatcher", StringComparison.OrdinalIgnoreCase))
+        {
+            _isWatcherMode = true;
+            // Same shape as -activitywatcher above - FpsOverlayWindow also needs a real Dispatcher to
+            // render and keep updating, so this doesn't block or shut down here either.
+            if (!FpsOverlayCoordinator.StartDetachedWatcher())
                 Shutdown();
             return;
         }

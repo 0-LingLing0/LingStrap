@@ -167,9 +167,9 @@
 
         <ui:CardControl Margin="0,0,0,8">
             <ui:CardControl.Header>
-                <TextBlock Text="Grey sky" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                <TextBlock Text="Gray sky" Style="{StaticResource Body}" FontWeight="SemiBold" />
             </ui:CardControl.Header>
-            <ui:ToggleSwitch x:Name="GreySkyToggle" Checked="GreySkyToggle_Changed" Unchecked="GreySkyToggle_Changed" />
+            <ui:ToggleSwitch x:Name="SkyGrayToggle" Checked="SkyGrayToggle_Changed" Unchecked="SkyGrayToggle_Changed" />
         </ui:CardControl>
 
         <TextBlock Text="Window" Style="{StaticResource SectionHeader}" />

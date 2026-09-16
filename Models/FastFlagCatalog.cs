@@ -25,7 +25,7 @@ public static class FastFlagCatalog
     public const string GrassMaxDistance      = "FIntFRMMaxGrassDistance";
     public const string GrassMovement         = "FIntGrassMovementReducedMotionFactor";
     public const string FreezeVoxelLighting   = "DFFlagDebugPauseVoxelizer";
-    public const string GreySky               = "FFlagDebugSkyGray";
+    public const string SkyGray               = "FFlagDebugSkyGray";
     public const string DisableDpiScaling     = "DFFlagDisableDPIScale";
     public const string LodBase               = "DFIntCSGLevelOfDetailSwitchingDistance";
     public const string Lod12                 = "DFIntCSGLevelOfDetailSwitchingDistanceL12";
@@ -51,8 +51,8 @@ public static class FastFlagCatalog
             Description: "How much grass sways in the wind - higher reduces the movement."),
         new FlagDefinition(FreezeVoxelLighting, FlagKind.Bool,
             Description: "Stops Roblox from recalculating voxel lighting, trading accuracy for performance."),
-        new FlagDefinition(GreySky, FlagKind.Bool,
-            Description: "Replaces the sky with flat grey, removing the skybox's rendering cost."),
+        new FlagDefinition(SkyGray, FlagKind.Bool,
+            Description: "Replaces the sky with flat gray, removing the skybox's rendering cost."),
         new FlagDefinition(DisableDpiScaling, FlagKind.Bool,
             Description: "Renders at your monitor's native pixel scale instead of Windows' DPI scaling."),
         new FlagDefinition(RendererD3D11, FlagKind.Bool, IsRenderer: true,
