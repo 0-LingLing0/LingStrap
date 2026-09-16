@@ -23,7 +23,7 @@ public static class UpdateCheckerService
 
     public enum UpdateStatus { UpToDate, UpdateAvailable, CheckFailed }
 
-    public record UpdateCheckResult(UpdateStatus Status, string? LatestVersion, string? ReleaseUrl, string? Message);
+    public record UpdateCheckResult(UpdateStatus Status, string? LatestVersion, string? ReleaseUrl, string? Message, string? ReleaseNotes = null);
 
     static UpdateCheckerService()
     {
@@ -55,6 +55,7 @@ public static class UpdateCheckerService
             using var doc = JsonDocument.Parse(json);
             var tagName = doc.RootElement.GetProperty("tag_name").GetString() ?? "";
             var releaseUrl = doc.RootElement.TryGetProperty("html_url", out var urlProp) ? urlProp.GetString() : null;
+            var releaseNotes = doc.RootElement.TryGetProperty("body", out var bodyProp) ? bodyProp.GetString() : null;
 
             var latest = ParseVersion(tagName);
             if (latest is null)
@@ -67,7 +68,8 @@ public static class UpdateCheckerService
             if (latest > current)
             {
                 Log.Info($"Update check: a newer version is available ({latest.ToString(3)} > {current.ToString(3)}).");
-                return new UpdateCheckResult(UpdateStatus.UpdateAvailable, latest.ToString(3), releaseUrl, null);
+                return new UpdateCheckResult(UpdateStatus.UpdateAvailable, latest.ToString(3), releaseUrl, null,
+                    string.IsNullOrWhiteSpace(releaseNotes) ? "(No release notes provided.)" : releaseNotes);
             }
 
             Log.Info($"Update check: already up to date ({current.ToString(3)}).");

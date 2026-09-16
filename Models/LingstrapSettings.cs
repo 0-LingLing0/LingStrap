@@ -73,4 +73,11 @@ public class LingstrapSettings
     /// <summary>The Roblox version hash Lingstrap last successfully installed, if any - lets a
     /// launch check for updates instead of re-deriving this from disk every time.</summary>
     public string? InstalledRobloxVersion { get; set; }
+
+    // --- Lingstrap updates -------------------------------------------------
+    /// <summary>Silently checks GitHub for a newer Lingstrap release once per launch.</summary>
+    public bool AutoCheckForUpdates { get; set; } = true;
+    /// <summary>The newest version the update-available dialog has already been shown for, so a
+    /// found update is only ever announced once instead of nagging on every single launch.</summary>
+    public string? LastSeenUpdateVersion { get; set; }
 }
