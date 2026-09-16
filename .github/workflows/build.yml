@@ -23,8 +23,19 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
+      # When this run was triggered by a version tag, bake that exact version into the exe instead
+      # of whatever <Version> happens to be committed in the csproj - otherwise a freshly installed
+      # v0.1.2 would still report itself as the older version the csproj was last bumped to, and the
+      # update checker would immediately (and wrongly) claim an update is available.
       - name: Publish Lingstrap
-        run: dotnet publish Lingstrap.csproj -c Release -o publish
+        shell: pwsh
+        run: |
+          $version = if ("${{ github.ref }}" -like "refs/tags/v*") { "${{ github.ref_name }}".TrimStart('v') } else { $null }
+          if ($version) {
+            dotnet publish Lingstrap.csproj -c Release -o publish -p:Version=$version -p:AssemblyVersion=$version -p:FileVersion=$version
+          } else {
+            dotnet publish Lingstrap.csproj -c Release -o publish
+          }
 
       - name: Publish LingstrapSetup
         run: dotnet publish Setup/Setup.csproj -c Release -o publish-setup
