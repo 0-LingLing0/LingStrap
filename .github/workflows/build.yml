@@ -3,6 +3,7 @@ name: Build Lingstrap
 on:
   push:
     branches: [ main, master ]
+    tags: [ 'v*' ]
   workflow_dispatch:
 
 jobs:
@@ -18,10 +19,13 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Restore
-        run: dotnet restore
+        run: dotnet restore Lingstrap.csproj Setup/Setup.csproj
 
-      - name: Publish
-        run: dotnet publish -c Release -o publish
+      - name: Publish Lingstrap
+        run: dotnet publish Lingstrap.csproj -c Release -o publish
+
+      - name: Publish LingstrapSetup
+        run: dotnet publish Setup/Setup.csproj -c Release -o publish-setup
 
       - name: Upload Lingstrap.exe
         uses: actions/upload-artifact@v4
@@ -29,3 +33,23 @@ jobs:
           name: Lingstrap
           path: publish/Lingstrap.exe
           if-no-files-found: error
+
+      - name: Upload LingstrapSetup.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: LingstrapSetup
+          path: publish-setup/LingstrapSetup.exe
+          if-no-files-found: error
+
+      # Only runs when a version tag (e.g. v0.2.0) is pushed - turns that build into a public
+      # GitHub Release with both exes attached, which is what the update checker and the tiny
+      # setup exe both fetch from. Uses the workflow's own built-in GITHUB_TOKEN, so no personal
+      # access token ever needs to be created or stored for this.
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            publish/Lingstrap.exe
+            publish-setup/LingstrapSetup.exe
+          generate_release_notes: true

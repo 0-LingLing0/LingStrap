@@ -30,4 +30,14 @@
     <Resource Include="lingstrap.png" />
   </ItemGroup>
 
+  <!-- Setup/ is its own separate project (the tiny standalone installer) - without this, this
+       project's default item globs would also sweep up its .cs files and its obj/ output,
+       colliding with this project's own generated AssemblyInfo. -->
+  <ItemGroup>
+    <Compile Remove="Setup\**" />
+    <Content Remove="Setup\**" />
+    <EmbeddedResource Remove="Setup\**" />
+    <None Remove="Setup\**" />
+  </ItemGroup>
+
 </Project>
