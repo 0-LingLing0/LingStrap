@@ -105,8 +105,9 @@ public partial class App : Application
 
         SettingsService.Load();
 
-        // Fixed dark theme with a custom accent built for the app icon, not the OS accent -
-        // applied once at startup rather than following the system theme.
+        // Fixed theme (dark by default, light if the user opted in on the Appearance page) with a
+        // custom accent built for the app icon, not the OS accent - applied once at startup rather
+        // than following the system theme.
         //
         // Using the explicit 4-color overload rather than Apply(color, theme): WPF-UI's automatic
         // dark-theme ramp lightens the base color further (brightness+17/saturation-45) to derive
@@ -114,7 +115,11 @@ public partial class App : Application
         // light violet like #A778FF, that washes out to near-white. Setting secondaryAccent (the
         // one dark theme uses as its default fill) to the base color itself keeps buttons vivid,
         // and tertiaryAccent reuses the icon's own darker gradient stop for depth.
-        ApplicationThemeManager.Apply(ApplicationTheme.Dark, WindowBackdropType.Mica);
+        var theme = SettingsService.Current.LightTheme ? ApplicationTheme.Light : ApplicationTheme.Dark;
+        ApplicationThemeManager.Apply(theme, WindowBackdropType.Mica);
+
+        if (SettingsService.Current.LightTheme)
+            ApplyLightPalette();
 
         var accent = SettingsService.Current.AccentTheme == Models.ColorThemeCatalog.CustomThemeName
             ? Models.ColorThemeCatalog.FromCustomColor(Models.ColorThemeCatalog.ParseCustomColor(SettingsService.Current.CustomAccentColor))
@@ -164,5 +169,29 @@ public partial class App : Application
         if (!_isWatcherMode) SettingsService.Save();
         Log.Info("Lingstrap exiting.");
         base.OnExit(e);
+    }
+
+    /// <summary>
+    /// App.xaml hardcodes a dark palette (ApplicationBackgroundColor, CardBackgroundFillColorDefault,
+    /// ControlStrokeColorDefault, TextFillColorPrimary/Secondary) as sibling resources so they survive
+    /// ApplicationThemeManager's own theme-dictionary swap - see the comment in App.xaml. That means
+    /// they don't move on their own when switching to Light, so this overrides those same five keys
+    /// with light-appropriate colors instead. Run once at startup (Light theme setting requires a
+    /// restart to apply anyway, same as accent color), so no need to ever undo this at runtime.
+    /// </summary>
+    private static void ApplyLightPalette()
+    {
+        SetColorResource("ApplicationBackgroundColor", "ApplicationBackgroundBrush", 0xFF, 0xF4, 0xF4, 0xF7);
+        SetColorResource("CardBackgroundFillColorDefault", "CardBackgroundFillColorDefaultBrush", 0xFF, 0xFF, 0xFF, 0xFF);
+        SetColorResource("ControlStrokeColorDefault", "ControlStrokeColorDefaultBrush", 0x1F, 0x00, 0x00, 0x00);
+        SetColorResource("TextFillColorPrimary", "TextFillColorPrimaryBrush", 0xFF, 0x1B, 0x1B, 0x1F);
+        SetColorResource("TextFillColorSecondary", "TextFillColorSecondaryBrush", 0xFF, 0x5C, 0x5F, 0x6B);
+    }
+
+    private static void SetColorResource(string colorKey, string brushKey, byte a, byte r, byte g, byte b)
+    {
+        var color = System.Windows.Media.Color.FromArgb(a, r, g, b);
+        Current.Resources[colorKey] = color;
+        Current.Resources[brushKey] = new System.Windows.Media.SolidColorBrush(color);
     }
 }

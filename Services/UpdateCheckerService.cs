@@ -1,4 +1,6 @@
 using System;
+using System.Diagnostics;
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -18,12 +20,14 @@ public static class UpdateCheckerService
 {
     private const string RepoOwner = "0-LingLing0";
     private const string RepoName = "LingStrap";
+    private const string SetupAssetName = "LingstrapSetup.exe";
 
-    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(8) };
+    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromMinutes(5) };
 
     public enum UpdateStatus { UpToDate, UpdateAvailable, CheckFailed }
 
-    public record UpdateCheckResult(UpdateStatus Status, string? LatestVersion, string? ReleaseUrl, string? Message, string? ReleaseNotes = null);
+    public record UpdateCheckResult(UpdateStatus Status, string? LatestVersion, string? ReleaseUrl, string? Message,
+        string? ReleaseNotes = null, string? SetupDownloadUrl = null);
 
     static UpdateCheckerService()
     {
@@ -57,6 +61,17 @@ public static class UpdateCheckerService
             var releaseUrl = doc.RootElement.TryGetProperty("html_url", out var urlProp) ? urlProp.GetString() : null;
             var releaseNotes = doc.RootElement.TryGetProperty("body", out var bodyProp) ? bodyProp.GetString() : null;
 
+            string? setupUrl = null;
+            if (doc.RootElement.TryGetProperty("assets", out var assets))
+            {
+                foreach (var asset in assets.EnumerateArray())
+                {
+                    if (!string.Equals(asset.GetProperty("name").GetString(), SetupAssetName, StringComparison.OrdinalIgnoreCase)) continue;
+                    setupUrl = asset.GetProperty("browser_download_url").GetString();
+                    break;
+                }
+            }
+
             var latest = ParseVersion(tagName);
             if (latest is null)
             {
@@ -69,7 +84,7 @@ public static class UpdateCheckerService
             {
                 Log.Info($"Update check: a newer version is available ({latest.ToString(3)} > {current.ToString(3)}).");
                 return new UpdateCheckResult(UpdateStatus.UpdateAvailable, latest.ToString(3), releaseUrl, null,
-                    string.IsNullOrWhiteSpace(releaseNotes) ? "(No release notes provided.)" : releaseNotes);
+                    string.IsNullOrWhiteSpace(releaseNotes) ? "(No release notes provided.)" : releaseNotes, setupUrl);
             }
 
             Log.Info($"Update check: already up to date ({current.ToString(3)}).");
@@ -79,6 +94,42 @@ public static class UpdateCheckerService
         {
             Log.Warn($"Update check failed: {ex.Message}");
             return new UpdateCheckResult(UpdateStatus.CheckFailed, null, null, "Couldn't reach GitHub - check your connection.");
+        }
+    }
+
+    /// <summary>
+    /// Downloads LingstrapSetup.exe (the same tiny installer people are handed to install Lingstrap
+    /// in the first place) to a temp file and launches it, then returns so the caller can shut this
+    /// process down - the setup exe's own install logic already closes any running Lingstrap and
+    /// replaces its exe once this process is out of the way, so no in-process self-replace is needed
+    /// here (an already-running exe can't overwrite itself on Windows anyway).
+    /// </summary>
+    public static async Task<bool> DownloadAndLaunchSetupAsync(string setupDownloadUrl)
+    {
+        try
+        {
+            var response = await Http.GetAsync(setupDownloadUrl, HttpCompletionOption.ResponseHeadersRead);
+            if (!response.IsSuccessStatusCode)
+            {
+                Log.Warn($"Update install: downloading LingstrapSetup.exe failed with HTTP {(int)response.StatusCode}.");
+                return false;
+            }
+
+            var tempPath = Path.Combine(Path.GetTempPath(), $"LingstrapSetup-{Guid.NewGuid():N}.exe");
+            await using (var httpStream = await response.Content.ReadAsStreamAsync())
+            await using (var fileStream = File.Create(tempPath))
+            {
+                await httpStream.CopyToAsync(fileStream);
+            }
+
+            Process.Start(new ProcessStartInfo { FileName = tempPath, UseShellExecute = true });
+            Log.Info("Update install: launched LingstrapSetup.exe to install the new version.");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"Update install failed: {ex.Message}");
+            return false;
         }
     }
 

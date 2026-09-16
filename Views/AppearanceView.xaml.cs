@@ -14,10 +14,49 @@ namespace Lingstrap.Views;
 
 public partial class AppearanceView : Page
 {
+    private bool _loading = true;
+
     public AppearanceView()
     {
         InitializeComponent();
         Populate();
+
+        LightThemeToggle.IsChecked = SettingsService.Current.LightTheme;
+        SelectClosestFontScale(SettingsService.Current.FontScalePercent);
+        _loading = false;
+    }
+
+    private void LightThemeToggle_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        SettingsService.Current.LightTheme = LightThemeToggle.IsChecked == true;
+        SettingsService.Save();
+        RestartApp();
+    }
+
+    /// <summary>Picks whichever preset is numerically closest to a stored value, in case an older
+    /// build stored a percentage (from the slider this used to be) that isn't one of the presets.</summary>
+    private void SelectClosestFontScale(int percent)
+    {
+        ComboBoxItem? closest = null;
+        var closestDiff = int.MaxValue;
+        foreach (ComboBoxItem item in FontScaleCombo.Items)
+        {
+            var diff = Math.Abs(int.Parse((string)item.Tag) - percent);
+            if (diff >= closestDiff) continue;
+            closestDiff = diff;
+            closest = item;
+        }
+        FontScaleCombo.SelectedItem = closest;
+    }
+
+    private void FontScaleCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading || FontScaleCombo.SelectedItem is not ComboBoxItem item) return;
+        var percent = int.Parse((string)item.Tag);
+        (Window.GetWindow(this) as MainWindow)?.ApplyFontScale(percent);
+        SettingsService.Current.FontScalePercent = percent;
+        SettingsService.Save();
     }
 
     private void Populate()

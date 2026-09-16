@@ -11,5 +11,34 @@
         <TextBlock Style="{StaticResource Sub}" Text="Pick an accent color for the app." />
 
         <WrapPanel x:Name="SwatchPanel" Margin="0,20,0,0" />
+
+        <ui:CardControl Margin="0,20,0,8">
+            <ui:CardControl.Header>
+                <StackPanel>
+                    <TextBlock Text="Light theme" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                    <TextBlock Style="{StaticResource Sub}" Margin="0,4,0,0" MaxWidth="450"
+                               Text="Switches from the default dark look to a light one. Restarts Lingstrap to apply." />
+                </StackPanel>
+            </ui:CardControl.Header>
+            <ui:ToggleSwitch x:Name="LightThemeToggle" Checked="LightThemeToggle_Changed" Unchecked="LightThemeToggle_Changed" />
+        </ui:CardControl>
+
+        <ui:CardControl Margin="0,0,0,8">
+            <ui:CardControl.Header>
+                <StackPanel>
+                    <TextBlock Text="UI scale" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                    <TextBlock Style="{StaticResource Sub}" Margin="0,4,0,0" MaxWidth="450"
+                               Text="Makes the whole app bigger or smaller. Applies instantly." />
+                </StackPanel>
+            </ui:CardControl.Header>
+            <ComboBox x:Name="FontScaleCombo" Width="120" SelectionChanged="FontScaleCombo_SelectionChanged">
+                <ComboBoxItem Content="80%" Tag="80" />
+                <ComboBoxItem Content="90%" Tag="90" />
+                <ComboBoxItem Content="100%" Tag="100" />
+                <ComboBoxItem Content="110%" Tag="110" />
+                <ComboBoxItem Content="125%" Tag="125" />
+                <ComboBoxItem Content="150%" Tag="150" />
+            </ComboBox>
+        </ui:CardControl>
     </StackPanel>
 </Page>

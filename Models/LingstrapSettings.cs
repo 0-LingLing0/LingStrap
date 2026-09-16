@@ -13,10 +13,11 @@ public class LingstrapSettings
     /// that no longer exist instead of leaving them orphaned. See SettingsService.Load.
     /// v2: removed UncapFps, TargetFps, ShowActivityPanel, MouseCursorFileName,
     /// ShiftlockCursorFileName and LastLaunch.
+    /// v3: removed AutoCheckForUpdates (bool), replaced by UpdateMode (enum: Off/Notify/AutoInstall).
     /// </summary>
     public int SchemaVersion { get; set; } = CurrentSchemaVersion;
 
-    public const int CurrentSchemaVersion = 2;
+    public const int CurrentSchemaVersion = 3;
 
     // --- Appearance ------------------------------------------------------
     /// <summary>Name of a ColorTheme in ColorThemeCatalog.All, or ColorThemeCatalog.CustomThemeName
@@ -27,6 +28,13 @@ public class LingstrapSettings
     /// <summary>The "RRGGBB" hex color picked via the Appearance page's custom color picker. Only
     /// meaningful when AccentTheme is ColorThemeCatalog.CustomThemeName.</summary>
     public string? CustomAccentColor { get; set; }
+
+    /// <summary>True for the light theme variant, false (default) for the original fixed dark theme.</summary>
+    public bool LightTheme { get; set; } = false;
+
+    /// <summary>Scales the whole UI (not just text) via a LayoutTransform on the main window's
+    /// content area. 100 is native size; the Appearance page offers roughly 80-150.</summary>
+    public int FontScalePercent { get; set; } = 100;
 
     // --- Presets -------------------------------------------------------
     public Preset ActivePreset { get; set; } = Preset.Balanced;
@@ -81,9 +89,13 @@ public class LingstrapSettings
     public string? InstalledRobloxVersion { get; set; }
 
     // --- Lingstrap updates -------------------------------------------------
-    /// <summary>Silently checks GitHub for a newer Lingstrap release once per launch.</summary>
-    public bool AutoCheckForUpdates { get; set; } = true;
+    /// <summary>How Lingstrap handles a new release found on startup. Off: never checks. Notify:
+    /// checks and shows what changed, letting the user choose to update. AutoInstall: checks and
+    /// installs silently, closing and reopening Lingstrap on the new version.</summary>
+    public UpdateCheckMode UpdateMode { get; set; } = UpdateCheckMode.Notify;
     /// <summary>The newest version the update-available dialog has already been shown for, so a
     /// found update is only ever announced once instead of nagging on every single launch.</summary>
     public string? LastSeenUpdateVersion { get; set; }
 }
+
+public enum UpdateCheckMode { Off, Notify, AutoInstall }

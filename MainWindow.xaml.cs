@@ -1,6 +1,6 @@
 using System;
-using System.Diagnostics;
 using System.Windows;
+using System.Windows.Media;
 using Lingstrap.Models;
 using Lingstrap.Services;
 using Lingstrap.Views;
@@ -18,6 +18,8 @@ public partial class MainWindow : FluentWindow
         Icon = icon;
         TitleBarIcon.Source = icon;
 
+        ApplyFontScale(SettingsService.Current.FontScalePercent);
+
         // Deliberately not calling SystemThemeWatcher.Watch: it forces the window to follow
         // the OS theme, which would undo the fixed dark theme + custom accent set at startup.
         // FluentWindow's own WindowBackdropType="Mica" (set in XAML) still applies Mica on its own.
@@ -26,23 +28,42 @@ public partial class MainWindow : FluentWindow
         Loaded += async (_, _) => await CheckForUpdateOnStartupAsync();
     }
 
-    /// <summary>Silently checks GitHub once per launch and, only the first time a given version is
-    /// seen, shows what changed. Never nags again for a version already announced.</summary>
+    /// <summary>
+    /// Scales the whole page-content area via a LayoutTransform, rather than trying to scale the
+    /// handful of centralized text Styles (H1/Body/Sub/...) - plenty of views still set FontSize
+    /// directly on individual elements (ad-hoc, not through those styles), so scaling only the named
+    /// styles would miss most of the UI. Unlike accent color and theme, this isn't baked into any
+    /// WPF-UI control Style at ControlsDictionary-merge time, so it can apply live, no restart needed.
+    /// </summary>
+    public void ApplyFontScale(int percent)
+    {
+        var scale = percent / 100.0;
+        RootNavigation.LayoutTransform = scale == 1.0 ? Transform.Identity : new ScaleTransform(scale, scale);
+    }
+
+    /// <summary>Silently checks GitHub once per launch per UpdateCheckMode: Off skips entirely,
+    /// Notify shows what changed (only the first time a given version is seen - never nags again for
+    /// a version already announced), AutoInstall installs it with no prompt at all.</summary>
     private async System.Threading.Tasks.Task CheckForUpdateOnStartupAsync()
     {
-        if (!SettingsService.Current.AutoCheckForUpdates) return;
+        var mode = SettingsService.Current.UpdateMode;
+        if (mode == UpdateCheckMode.Off) return;
 
         var result = await UpdateCheckerService.CheckForUpdateAsync();
         if (result.Status != UpdateCheckerService.UpdateStatus.UpdateAvailable) return;
-        if (result.LatestVersion == SettingsService.Current.LastSeenUpdateVersion) return;
 
+        if (mode == UpdateCheckMode.AutoInstall)
+        {
+            if (result.SetupDownloadUrl != null && await UpdateCheckerService.DownloadAndLaunchSetupAsync(result.SetupDownloadUrl))
+                Application.Current.Shutdown();
+            return;
+        }
+
+        if (result.LatestVersion == SettingsService.Current.LastSeenUpdateVersion) return;
         SettingsService.Current.LastSeenUpdateVersion = result.LatestVersion;
         SettingsService.Save();
 
-        var openRelease = await DialogHelper.ShowConfirmAsync(this, AboutView.BuildReleaseNotesContent(result.ReleaseNotes),
-            $"Version {result.LatestVersion} is available - what's new", confirmText: "Open release page", cancelText: "Later");
-        if (openRelease && result.ReleaseUrl != null)
-            Process.Start(new ProcessStartInfo { FileName = result.ReleaseUrl, UseShellExecute = true });
+        await UpdateDialogHelper.ShowAsync(this, result);
     }
 
     private static void StartBackgroundServices()
