@@ -31,7 +31,6 @@ public partial class BehaviourView : Page
         ChkNotification.IsChecked   = s.ShowServerNotification;
         ChkDiscord.IsChecked        = s.DiscordRichPresence;
         ChkFpsOverlay.IsChecked     = s.ShowFpsOverlay;
-        ChkPingOverlay.IsChecked    = s.ShowPingOverlay;
         FpsPositionCombo.SelectedIndex = (int)s.FpsOverlayPosition;
 
         BannerDurationSlider.Value = s.OverlayBannerSeconds;
@@ -100,7 +99,6 @@ public partial class BehaviourView : Page
         s.ShowServerNotification  = ChkNotification.IsChecked == true;
         s.DiscordRichPresence     = ChkDiscord.IsChecked == true;
         s.ShowFpsOverlay          = ChkFpsOverlay.IsChecked == true;
-        s.ShowPingOverlay         = ChkPingOverlay.IsChecked == true;
 
         SettingsService.Save();
 

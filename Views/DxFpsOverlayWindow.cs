@@ -32,17 +32,7 @@ namespace Lingstrap.Views;
 public sealed class DxFpsOverlayWindow : IDisposable
 {
     private const int WidthPx = 120;
-    // Single-stat mode (just FPS, or just ping) keeps the original one-row pill height. With both
-    // stats on, FPS keeps the larger/primary row on top and ping gets a shorter, secondary row
-    // below it, inside the same pill - "the ping would be below the fps" per the request.
-    private const int SingleRowHeight = 44;
-    // Tighter than the single-row height so the two lines sit close together rather than each
-    // floating in the middle of an oversized band - DrawText below centers each string vertically
-    // within its own row height, so a taller band just means more empty space around the text.
-    // Kept close to the actual glyph height at each font size (18pt / 13pt) rather than the
-    // original even split, since that's what was leaving visible dead space between the two lines.
-    private const int FpsRowHeight = 28;
-    private const int PingRowHeight = 20;
+    private const int HeightPx = 44;
     private const int Margin = 16;
     private const float CornerRadius = 10f;
 
@@ -165,39 +155,26 @@ public sealed class DxFpsOverlayWindow : IDisposable
 
     private readonly WndProcDelegate _wndProc;
     private readonly IntPtr _robloxHwnd;
-    private readonly bool _showFps;
-    private readonly bool _showPing;
-    private readonly int _heightPx;
     private IntPtr _hwnd;
     private IntPtr _memDc;
     private IntPtr _dibBitmap;
     private IntPtr _oldBitmap;
 
     private ID2D1DCRenderTarget _renderTarget = null!;
-    private IDWriteTextFormat _primaryTextFormat = null!;
-    private IDWriteTextFormat _secondaryTextFormat = null!;
+    private IDWriteTextFormat _textFormat = null!;
     private ID2D1SolidColorBrush _textBrush = null!;
-    private ID2D1SolidColorBrush _secondaryTextBrush = null!;
     private ID2D1SolidColorBrush _backgroundBrush = null!;
     private ID2D1SolidColorBrush _borderBrush = null!;
 
-    private string _fpsText = "-- FPS";
-    private string _pingText = "-- ms";
+    private string _currentText = "-- FPS";
     private System.Windows.Threading.DispatcherTimer? _followTimer;
     private bool _isHidden;
     private System.Windows.Rect? _lastRobloxRect;
     private bool _wasRobloxForeground;
 
-    /// <summary>showFps and showPing are fixed for the lifetime of this window - both come straight
-    /// from settings read once when the detached watcher process starts, and that process's whole
-    /// job for this Roblox session is done once it's showing something, so there's no need to handle
-    /// either one flipping on/off while the window is already up.</summary>
-    public DxFpsOverlayWindow(IntPtr robloxHwnd, bool showFps, bool showPing)
+    public DxFpsOverlayWindow(IntPtr robloxHwnd)
     {
         _robloxHwnd = robloxHwnd;
-        _showFps = showFps;
-        _showPing = showPing;
-        _heightPx = showFps && showPing ? FpsRowHeight + PingRowHeight : SingleRowHeight;
         _wndProc = WndProc;
         CreateNativeWindow();
         InitializeGraphics();
@@ -228,7 +205,7 @@ public sealed class DxFpsOverlayWindow : IDisposable
         // window's content; there's nothing to show until the first Render() call below.
         const uint exStyle = WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_LAYERED;
         _hwnd = Native.CreateWindowEx(exStyle, className, "Lingstrap FPS", WS_POPUP,
-            Margin, Margin, WidthPx, _heightPx, IntPtr.Zero, IntPtr.Zero, hInstance, IntPtr.Zero);
+            Margin, Margin, WidthPx, HeightPx, IntPtr.Zero, IntPtr.Zero, hInstance, IntPtr.Zero);
     }
 
     /// <summary>Belt-and-suspenders alongside WS_EX_TRANSPARENT - answering WM_NCHITTEST directly
@@ -248,7 +225,7 @@ public sealed class DxFpsOverlayWindow : IDisposable
         {
             biSize = (uint)Marshal.SizeOf<BITMAPINFOHEADER>(),
             biWidth = WidthPx,
-            biHeight = -_heightPx,
+            biHeight = -HeightPx,
             biPlanes = 1,
             biBitCount = 32,
             biCompression = 0, // BI_RGB
@@ -263,21 +240,14 @@ public sealed class DxFpsOverlayWindow : IDisposable
         using var d2dFactory = D2D1.D2D1CreateFactory<ID2D1Factory>(Vortice.Direct2D1.FactoryType.SingleThreaded);
         var rtProps = new RenderTargetProperties(new Vortice.DCommon.PixelFormat(Vortice.DXGI.Format.B8G8R8A8_UNorm, Vortice.DCommon.AlphaMode.Premultiplied));
         _renderTarget = d2dFactory.CreateDCRenderTarget(rtProps);
-        _renderTarget.BindDC(_memDc, new System.Drawing.Rectangle(0, 0, WidthPx, _heightPx));
+        _renderTarget.BindDC(_memDc, new System.Drawing.Rectangle(0, 0, WidthPx, HeightPx));
 
         var dwriteFactory = DWrite.DWriteCreateFactory<IDWriteFactory>(Vortice.DirectWrite.FactoryType.Shared);
-        _primaryTextFormat = dwriteFactory.CreateTextFormat("Segoe UI", FontWeight.Bold, Vortice.DirectWrite.FontStyle.Normal, FontStretch.Normal, 18);
-        _primaryTextFormat.TextAlignment = Vortice.DirectWrite.TextAlignment.Center;
-        _primaryTextFormat.ParagraphAlignment = Vortice.DirectWrite.ParagraphAlignment.Center;
-
-        // Smaller/dimmer - only used for the ping row when it's sharing the pill with FPS, so FPS
-        // stays the visually primary stat and ping reads as a secondary detail below it.
-        _secondaryTextFormat = dwriteFactory.CreateTextFormat("Segoe UI", FontWeight.SemiBold, Vortice.DirectWrite.FontStyle.Normal, FontStretch.Normal, 13);
-        _secondaryTextFormat.TextAlignment = Vortice.DirectWrite.TextAlignment.Center;
-        _secondaryTextFormat.ParagraphAlignment = Vortice.DirectWrite.ParagraphAlignment.Center;
+        _textFormat = dwriteFactory.CreateTextFormat("Segoe UI", FontWeight.Bold, Vortice.DirectWrite.FontStyle.Normal, FontStretch.Normal, 18);
+        _textFormat.TextAlignment = Vortice.DirectWrite.TextAlignment.Center;
+        _textFormat.ParagraphAlignment = Vortice.DirectWrite.ParagraphAlignment.Center;
 
         _textBrush = _renderTarget.CreateSolidColorBrush(new Color4(1f, 1f, 1f, 1f));
-        _secondaryTextBrush = _renderTarget.CreateSolidColorBrush(new Color4(1f, 1f, 1f, 0.75f));
         _backgroundBrush = _renderTarget.CreateSolidColorBrush(new Color4(0f, 0f, 0f, 0.7f));
         _borderBrush = _renderTarget.CreateSolidColorBrush(new Color4(1f, 1f, 1f, 0.15f));
     }
@@ -294,7 +264,6 @@ public sealed class DxFpsOverlayWindow : IDisposable
         var isLight = SettingsService.Current.LightTheme;
 
         _textBrush.Color = isLight ? new Color4(0.106f, 0.106f, 0.122f, 1f) : new Color4(1f, 1f, 1f, 1f);
-        _secondaryTextBrush.Color = isLight ? new Color4(0.106f, 0.106f, 0.122f, 0.7f) : new Color4(1f, 1f, 1f, 0.75f);
         _backgroundBrush.Color = isLight
             ? new Color4(1f, 1f, 1f, 0.85f)
             : new Color4(0.086f, 0.09f, 0.122f, 0.85f); // #16171F, same dark base the app itself uses
@@ -303,16 +272,7 @@ public sealed class DxFpsOverlayWindow : IDisposable
 
     public void UpdateFps(double fps)
     {
-        _fpsText = $"{Math.Round(fps)} FPS";
-        Render();
-    }
-
-    /// <summary>null means the last ping attempt timed out/failed (e.g. the server host firewalls
-    /// ICMP) rather than "no data yet" - both show the same placeholder since there's nothing more
-    /// useful to say about either from here.</summary>
-    public void UpdatePing(long? ms)
-    {
-        _pingText = ms.HasValue ? $"{ms} ms" : "-- ms";
+        _currentText = $"{Math.Round(fps)} FPS";
         Render();
     }
 
@@ -329,27 +289,17 @@ public sealed class DxFpsOverlayWindow : IDisposable
 
         var pillRect = new RoundedRectangle
         {
-            Rect = new Vortice.Mathematics.Rect(1, 1, WidthPx - 2, _heightPx - 2),
+            Rect = new Vortice.Mathematics.Rect(1, 1, WidthPx - 2, HeightPx - 2),
             RadiusX = CornerRadius,
             RadiusY = CornerRadius,
         };
         _renderTarget.FillRoundedRectangle(pillRect, _backgroundBrush);
         _renderTarget.DrawRoundedRectangle(pillRect, _borderBrush, 1f);
-
-        if (_showFps && _showPing)
-        {
-            _renderTarget.DrawText(_fpsText, _primaryTextFormat, new Vortice.Mathematics.Rect(0, 0, WidthPx, FpsRowHeight), _textBrush);
-            _renderTarget.DrawText(_pingText, _secondaryTextFormat, new Vortice.Mathematics.Rect(0, FpsRowHeight, WidthPx, PingRowHeight), _secondaryTextBrush);
-        }
-        else
-        {
-            var soloText = _showFps ? _fpsText : _pingText;
-            _renderTarget.DrawText(soloText, _primaryTextFormat, new Vortice.Mathematics.Rect(0, 0, WidthPx, _heightPx), _textBrush);
-        }
+        _renderTarget.DrawText(_currentText, _textFormat, new Vortice.Mathematics.Rect(0, 0, WidthPx, HeightPx), _textBrush);
 
         _renderTarget.EndDraw();
 
-        var size = new SIZE { cx = WidthPx, cy = _heightPx };
+        var size = new SIZE { cx = WidthPx, cy = HeightPx };
         var sourcePoint = new POINT { X = 0, Y = 0 };
         var destPoint = new POINT { X = (int)Left, Y = (int)Top };
         var blend = new BLENDFUNCTION { BlendOp = AC_SRC_OVER, SourceConstantAlpha = 255, AlphaFormat = AC_SRC_ALPHA };
@@ -381,8 +331,8 @@ public sealed class DxFpsOverlayWindow : IDisposable
         {
             FpsOverlayPosition.TopLeft => (robloxRect.Left + Margin, robloxRect.Top + Margin),
             FpsOverlayPosition.TopRight => (robloxRect.Right - WidthPx - Margin, robloxRect.Top + Margin),
-            FpsOverlayPosition.BottomLeft => (robloxRect.Left + Margin, robloxRect.Bottom - _heightPx - Margin),
-            _ => (robloxRect.Right - WidthPx - Margin, robloxRect.Bottom - _heightPx - Margin),
+            FpsOverlayPosition.BottomLeft => (robloxRect.Left + Margin, robloxRect.Bottom - HeightPx - Margin),
+            _ => (robloxRect.Right - WidthPx - Margin, robloxRect.Bottom - HeightPx - Margin),
         };
         Render();
     }
@@ -435,10 +385,8 @@ public sealed class DxFpsOverlayWindow : IDisposable
         _followTimer?.Stop();
         _borderBrush?.Dispose();
         _backgroundBrush?.Dispose();
-        _secondaryTextBrush?.Dispose();
         _textBrush?.Dispose();
-        _secondaryTextFormat?.Dispose();
-        _primaryTextFormat?.Dispose();
+        _textFormat?.Dispose();
         _renderTarget?.Dispose();
         if (_memDc != IntPtr.Zero)
         {
