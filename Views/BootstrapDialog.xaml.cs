@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -26,6 +27,10 @@ public partial class BootstrapDialog : Window, ILaunchProgressDialog
     public BootstrapDialog()
     {
         InitializeComponent();
+
+        // Was a hardcoded "v0.1.0" in XAML, never actually reflecting the exe's own version (which CI
+        // bakes in from the release tag at build time - see AboutView for the same computation).
+        VersionText.Text = "v" + (Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.1.0");
 
         Left = (SystemParameters.PrimaryScreenWidth - Width) / 2;
         Top = (SystemParameters.PrimaryScreenHeight - Height) / 2;

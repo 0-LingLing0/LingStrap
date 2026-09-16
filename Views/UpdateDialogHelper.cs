@@ -46,6 +46,29 @@ public static class UpdateDialogHelper
         }
     }
 
+    /// <summary>Same release notes, shown after the fact instead of as an install prompt - for the
+    /// first launch of a version that UpdateCheckMode.AutoInstall already installed silently with no
+    /// prior notice.</summary>
+    public static async Task ShowWhatsNewAsync(FrameworkElement owner, UpdateCheckerService.UpdateCheckResult result)
+    {
+        var host = ContentDialogHost.GetForWindow(Window.GetWindow(owner));
+        if (host == null) return;
+
+        var dialog = new ContentDialog(host)
+        {
+            Title = $"Now on version {result.LatestVersion} - what's new",
+            Content = BuildReleaseNotesContent(result.ReleaseNotes),
+            SecondaryButtonText = result.ReleaseUrl != null ? "GitHub" : string.Empty,
+            CloseButtonText = "Got it",
+            DefaultButton = ContentDialogButton.Close,
+        };
+
+        var choice = await dialog.ShowAsync();
+
+        if (choice == ContentDialogResult.Secondary && result.ReleaseUrl != null)
+            Process.Start(new ProcessStartInfo { FileName = result.ReleaseUrl, UseShellExecute = true });
+    }
+
     internal static FrameworkElement BuildReleaseNotesContent(string? notes)
     {
         return new ScrollViewer

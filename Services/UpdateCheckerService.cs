@@ -88,7 +88,11 @@ public static class UpdateCheckerService
             }
 
             Log.Info($"Update check: already up to date ({current.ToString(3)}).");
-            return new UpdateCheckResult(UpdateStatus.UpToDate, current.ToString(3), null, null);
+            // Release notes included here too (not just the UpdateAvailable branch below) so a
+            // caller can show a "here's what's new" notice on the first launch of a version that
+            // was installed silently (UpdateCheckMode.AutoInstall never prompts beforehand).
+            return new UpdateCheckResult(UpdateStatus.UpToDate, current.ToString(3), releaseUrl, null,
+                string.IsNullOrWhiteSpace(releaseNotes) ? "(No release notes provided.)" : releaseNotes);
         }
         catch (Exception ex)
         {

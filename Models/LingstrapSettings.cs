@@ -96,8 +96,10 @@ public class LingstrapSettings
     /// checks and shows what changed, letting the user choose to update. AutoInstall: checks and
     /// installs silently, closing and reopening Lingstrap on the new version.</summary>
     public UpdateCheckMode UpdateMode { get; set; } = UpdateCheckMode.Notify;
-    /// <summary>The newest version the update-available dialog has already been shown for, so a
-    /// found update is only ever announced once instead of nagging on every single launch.</summary>
+    /// <summary>The newest version a "what's new" notice has already been shown for - checked once a
+    /// launch finds itself already up to date, so a version that AutoInstall installed silently (no
+    /// prior prompt) still gets announced once on its first launch. Not used to gate the
+    /// still-pending "update available" prompt itself - that one shows every launch until installed.</summary>
     public string? LastSeenUpdateVersion { get; set; }
 
     // --- Diagnostics -----------------------------------------------------

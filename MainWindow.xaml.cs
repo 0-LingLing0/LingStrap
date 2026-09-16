@@ -116,28 +116,41 @@ public partial class MainWindow : FluentWindow
     }
 
     /// <summary>Silently checks GitHub once per launch per UpdateCheckMode: Off skips entirely,
-    /// Notify shows what changed (only the first time a given version is seen - never nags again for
-    /// a version already announced), AutoInstall installs it with no prompt at all.</summary>
+    /// Notify shows the "update available" prompt every launch until it's actually installed (no
+    /// more one-time nag - LastSeenUpdateVersion no longer gates this), AutoInstall installs it with
+    /// no prompt. Either way, once a launch finds itself already on a version it hasn't announced yet
+    /// (LastSeenUpdateVersion behind the current version) - the only way to reach that is having just
+    /// installed silently via AutoInstall, since Notify's own prompt already records the version it
+    /// showed - it shows a "what's new" notice instead, so a silent install still tells you what changed.</summary>
     private async System.Threading.Tasks.Task CheckForUpdateOnStartupAsync()
     {
         var mode = SettingsService.Current.UpdateMode;
         if (mode == UpdateCheckMode.Off) return;
 
         var result = await UpdateCheckerService.CheckForUpdateAsync();
-        if (result.Status != UpdateCheckerService.UpdateStatus.UpdateAvailable) return;
 
-        if (mode == UpdateCheckMode.AutoInstall)
+        if (result.Status == UpdateCheckerService.UpdateStatus.UpdateAvailable)
         {
-            if (result.SetupDownloadUrl != null && await UpdateCheckerService.DownloadAndLaunchSetupAsync(result.SetupDownloadUrl))
-                Application.Current.Shutdown();
+            if (mode == UpdateCheckMode.AutoInstall)
+            {
+                if (result.SetupDownloadUrl != null && await UpdateCheckerService.DownloadAndLaunchSetupAsync(result.SetupDownloadUrl))
+                    Application.Current.Shutdown();
+                return;
+            }
+
+            await UpdateDialogHelper.ShowAsync(this, result);
+            SettingsService.Current.LastSeenUpdateVersion = result.LatestVersion;
+            SettingsService.Save();
             return;
         }
 
-        if (result.LatestVersion == SettingsService.Current.LastSeenUpdateVersion) return;
-        SettingsService.Current.LastSeenUpdateVersion = result.LatestVersion;
-        SettingsService.Save();
-
-        await UpdateDialogHelper.ShowAsync(this, result);
+        if (result.Status == UpdateCheckerService.UpdateStatus.UpToDate &&
+            result.LatestVersion != null && result.LatestVersion != SettingsService.Current.LastSeenUpdateVersion)
+        {
+            SettingsService.Current.LastSeenUpdateVersion = result.LatestVersion;
+            SettingsService.Save();
+            await UpdateDialogHelper.ShowWhatsNewAsync(this, result);
+        }
     }
 
     /// <summary>Also called directly (with no MainWindow at all) when Roblox is launched from the
