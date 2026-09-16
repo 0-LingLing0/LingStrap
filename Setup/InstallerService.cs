@@ -14,12 +14,24 @@ namespace Lingstrap.Setup;
 /// Downloads and installs the latest published Lingstrap release from GitHub - the whole point of
 /// this tiny setup exe is that it's the only thing that needs to be sent around; everything else is
 /// fetched fresh from GitHub Releases, the same way Lingstrap itself bootstraps a Roblox install.
+///
+/// This class never hardcodes a version - it always asks GitHub for whatever is newest at run time,
+/// so a single build of LingstrapSetup.exe keeps working for every future Lingstrap release forever.
+/// That guarantee depends entirely on <see cref="AssetName"/> and <see cref="BinaryReleaseTag"/>
+/// below never changing - the CI workflow (.github/workflows/build.yml) must keep publishing under
+/// these exact same names on every future release, or every copy of this exe already handed out
+/// stops finding the binary.
 /// </summary>
 public static class InstallerService
 {
     private const string RepoOwner = "0-LingLing0";
     private const string RepoName = "LingStrap";
     private const string AssetName = "Lingstrap.exe";
+
+    /// <summary>Lingstrap.exe itself is never attached to the public version-tag release (so that
+    /// release page only ever shows this installer) - it lives in a separate, always-overwritten
+    /// pre-release under this fixed tag instead. Permanent contract - see the class remarks above.</summary>
+    private const string BinaryReleaseTag = "lingstrap-binary";
 
     public static string InstallDir { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Lingstrap");
@@ -38,27 +50,16 @@ public static class InstallerService
 
     public static async Task<ReleaseInfo> GetLatestReleaseAsync()
     {
-        HttpResponseMessage response;
-        try
-        {
-            response = await Http.GetAsync($"https://api.github.com/repos/{RepoOwner}/{RepoName}/releases/latest");
-        }
-        catch (HttpRequestException ex)
-        {
-            throw new InstallException($"Could not reach GitHub - check your connection. ({ex.Message})");
-        }
+        // The public release just tells us the human-facing version number to show while installing.
+        using var latest = await FetchReleaseAsync("latest", "No Lingstrap release is published yet - ask whoever sent you this installer to publish one first.");
+        var version = latest.RootElement.GetProperty("tag_name").GetString() ?? "unknown";
 
-        if (response.StatusCode == HttpStatusCode.NotFound)
-            throw new InstallException("No Lingstrap release is published yet - ask whoever sent you this installer to publish one first.");
-        if (!response.IsSuccessStatusCode)
-            throw new InstallException($"GitHub returned an error ({(int)response.StatusCode}).");
+        // The actual exe lives in a separate, always-overwritten pre-release so the release page
+        // above never shows anything but this installer.
+        using var binary = await FetchReleaseAsync($"tags/{BinaryReleaseTag}", "The Lingstrap.exe binary release hasn't been published yet.");
 
-        var json = await response.Content.ReadAsStringAsync();
-        using var doc = JsonDocument.Parse(json);
-        var tagName = doc.RootElement.GetProperty("tag_name").GetString() ?? "unknown";
-
-        if (!doc.RootElement.TryGetProperty("assets", out var assets) || assets.GetArrayLength() == 0)
-            throw new InstallException("The latest release has no downloadable files attached.");
+        if (!binary.RootElement.TryGetProperty("assets", out var assets) || assets.GetArrayLength() == 0)
+            throw new InstallException("The Lingstrap.exe binary release has no downloadable files attached.");
 
         foreach (var asset in assets.EnumerateArray())
         {
@@ -67,10 +68,31 @@ public static class InstallerService
 
             var url = asset.GetProperty("browser_download_url").GetString()!;
             var size = asset.GetProperty("size").GetInt64();
-            return new ReleaseInfo(tagName, url, size);
+            return new ReleaseInfo(version, url, size);
         }
 
-        throw new InstallException($"The latest release doesn't include a '{AssetName}' file.");
+        throw new InstallException($"The binary release doesn't include a '{AssetName}' file.");
+    }
+
+    private static async Task<JsonDocument> FetchReleaseAsync(string releasePathSuffix, string notFoundMessage)
+    {
+        HttpResponseMessage response;
+        try
+        {
+            response = await Http.GetAsync($"https://api.github.com/repos/{RepoOwner}/{RepoName}/releases/{releasePathSuffix}");
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new InstallException($"Could not reach GitHub - check your connection. ({ex.Message})");
+        }
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+            throw new InstallException(notFoundMessage);
+        if (!response.IsSuccessStatusCode)
+            throw new InstallException($"GitHub returned an error ({(int)response.StatusCode}).");
+
+        var json = await response.Content.ReadAsStringAsync();
+        return JsonDocument.Parse(json);
     }
 
     public static async Task DownloadAndInstallAsync(ReleaseInfo release, Action<long, long> onProgress)

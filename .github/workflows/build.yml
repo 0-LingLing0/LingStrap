@@ -71,20 +71,34 @@ jobs:
           }
           $log = git log $range --pretty=format:"- %s" --no-merges
           if ([string]::IsNullOrWhiteSpace($log)) { $log = "No notable changes." }
-          # Both exes have to stay attached for LingstrapSetup.exe and the in-app update checker to
-          # work, but a person landing on this page by hand should only ever grab the small one.
-          $intro = "**Download ``LingstrapSetup.exe``** - that's the only file you need, it installs everything else automatically.`n"
-          "$intro`n$log" | Out-File -FilePath changelog.txt -Encoding utf8
+          $log | Out-File -FilePath changelog.txt -Encoding utf8
 
-      # Only runs when a version tag (e.g. v0.2.0) is pushed - turns that build into a public
-      # GitHub Release with both exes attached, which is what the update checker and the tiny
-      # setup exe both fetch from. Uses the workflow's own built-in GITHUB_TOKEN, so no personal
-      # access token ever needs to be created or stored for this.
+      # The public, human-facing release for this version tag - only LingstrapSetup.exe attached, so
+      # someone landing here by hand only ever sees the one small file they're meant to download.
+      # Uses the workflow's own built-in GITHUB_TOKEN, so no personal access token ever needs to be
+      # created or stored for this.
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            publish/Lingstrap.exe
-            publish-setup/LingstrapSetup.exe
+          files: publish-setup/LingstrapSetup.exe
           body_path: changelog.txt
+
+      # Lingstrap.exe itself is NOT attached to the release above - it lives here instead, under a
+      # fixed tag that gets overwritten every version. LingstrapSetup.exe (InstallerService) fetches
+      # it from this exact release by tag name. Kept as a pre-release so it never becomes the repo's
+      # "Latest release" and stays out of the way of anyone just browsing Releases.
+      #
+      # PERMANENT CONTRACT: tag_name "lingstrap-binary" and the file name "Lingstrap.exe" must never
+      # change. Every LingstrapSetup.exe already handed out looks for exactly these two names on
+      # every future run (see Setup/InstallerService.cs) - renaming either one silently breaks every
+      # copy already out in the world.
+      - name: Publish Lingstrap.exe binary release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: lingstrap-binary
+          name: "Lingstrap.exe (internal - not for direct download)"
+          prerelease: true
+          body: "Used internally by LingstrapSetup.exe and the in-app updater. Get the installer from the latest normal release instead."
+          files: publish/Lingstrap.exe
