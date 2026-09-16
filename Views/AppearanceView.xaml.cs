@@ -131,8 +131,10 @@ public partial class AppearanceView : Page
         }
 
         var isCustomSelected = current == ColorThemeCatalog.CustomThemeName;
-        var customColor = isCustomSelected ? _pendingCustomColor : null;
-        SwatchPanel.Children.Add(BuildCustomSwatch(customColor, isCustomSelected));
+        // _pendingCustomColor always, not just while custom is the active theme - switching to a
+        // built-in preset and back should still find your last custom color waiting in this slot
+        // instead of resetting it to a blank "add" button.
+        SwatchPanel.Children.Add(BuildCustomSwatch(_pendingCustomColor, isCustomSelected));
     }
 
     private static Border BuildSwatch(Color color, string tooltip, bool isSelected, Action onSelect)
@@ -217,6 +219,15 @@ public partial class AppearanceView : Page
             return customSwatch;
         }
 
+        // Transparent background means this swatch's only contrast comes from its own border/icon
+        // color against the page behind it - a translucent white (fine on the normal dark page) was
+        // nearly invisible on the light theme variant, since that page background is itself close to
+        // white. Picks the dim color from whichever theme is actually running right now (the page's
+        // real background doesn't follow _pendingLightTheme until the restart Apply triggers).
+        var dim = SettingsService.Current.LightTheme
+            ? Color.FromArgb(0x80, 0x1B, 0x1B, 0x1F)
+            : Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF);
+
         var swatch = new Border
         {
             Width = 60,
@@ -224,7 +235,7 @@ public partial class AppearanceView : Page
             Margin = new Thickness(0, 0, 14, 14),
             CornerRadius = new CornerRadius(30),
             Background = Brushes.Transparent,
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF)),
+            BorderBrush = new SolidColorBrush(dim),
             BorderThickness = new Thickness(2),
             Cursor = Cursors.Hand,
             ToolTip = "Pick a custom color",
@@ -233,7 +244,7 @@ public partial class AppearanceView : Page
             Child = new SymbolIcon
             {
                 Symbol = SymbolRegular.Add24,
-                Foreground = new SolidColorBrush(Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF)),
+                Foreground = new SolidColorBrush(dim),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
             },
