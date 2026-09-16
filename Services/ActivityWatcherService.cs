@@ -38,6 +38,39 @@ public static class ActivityWatcherService
     public static event Action<ActivityEntry>? Joined;
     public static event Action? Left;
 
+    /// <summary>
+    /// One-off, non-tailing lookup for "what server is already joined, right now" - unlike Start(),
+    /// which deliberately skips a log file's existing content so a long-running watcher doesn't
+    /// re-announce a stale join, this reads the whole file. Meant for a watcher that can start after
+    /// the join it cares about already happened (the FPS/ping overlay's elevated process, which can
+    /// take a couple of seconds to spin up via schtasks) and would otherwise never see it via the
+    /// live Joined event at all this session.
+    /// </summary>
+    public static string? TryGetLastKnownServerIp()
+    {
+        try
+        {
+            if (!Directory.Exists(Paths.RobloxLogs)) return null;
+
+            var newest = Directory.GetFiles(Paths.RobloxLogs, "*.log")
+                .OrderByDescending(f => new FileInfo(f).LastWriteTimeUtc)
+                .FirstOrDefault();
+            if (newest is null) return null;
+
+            using var fs = new FileStream(newest, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var reader = new StreamReader(fs, Encoding.UTF8);
+            var text = reader.ReadToEnd();
+
+            var matches = ServerIdPattern.Matches(text);
+            return matches.Count > 0 ? matches[^1].Groups["ip"].Value : null;
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"Could not read last known server IP: {ex.Message}");
+            return null;
+        }
+    }
+
     private static Timer? _timer;
 
     /// <summary>Per-log-file read position and any join still waiting for its real server address.</summary>

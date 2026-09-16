@@ -112,6 +112,10 @@ public class LingstrapSettings
     /// that extra process spawn (even a fast, non-hanging one) was adding to launch time for no
     /// benefit on the overwhelmingly common case where the task is already there.</summary>
     public bool FpsWatcherTaskConfirmed { get; set; } = false;
+    /// <summary>Shows live ping (round-trip time to the current server) below the FPS counter, or on
+    /// its own if the FPS counter is off. Unlike the FPS counter, this needs no administrator rights
+    /// at all (a plain ICMP echo, not an ETW session), so it never triggers the elevation setup.</summary>
+    public bool ShowPingOverlay { get; set; } = false;
 }
 
 public enum UpdateCheckMode { Off, Notify, AutoInstall }

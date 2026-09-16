@@ -208,7 +208,7 @@
                     <ui:SymbolIcon Symbol="TopSpeed24" />
                 </ui:CardExpander.Icon>
                 <ui:CardExpander.Header>
-                    <TextBlock Text="FPS overlay" Style="{StaticResource Body}" FontWeight="SemiBold" FontSize="15" />
+                    <TextBlock Text="FPS &amp; ping overlay" Style="{StaticResource Body}" FontWeight="SemiBold" FontSize="15" />
                 </ui:CardExpander.Header>
                 <StackPanel>
                     <ui:CardControl Margin="0,0,0,8">
@@ -220,6 +220,17 @@
                             </StackPanel>
                         </ui:CardControl.Header>
                         <ui:ToggleSwitch x:Name="ChkFpsOverlay" Checked="Setting_Changed" Unchecked="Setting_Changed" />
+                    </ui:CardControl>
+
+                    <ui:CardControl Margin="0,0,0,8">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <TextBlock Text="Show ping while Roblox is running" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                                <TextBlock Style="{StaticResource Sub}" Margin="0,4,0,0" MaxWidth="450"
+                                           Text="Round-trip time to the current server, shown below the FPS counter (or on its own if that's off). A plain network ping, not Roblox's own reported ping, and no administrator rights needed." />
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ui:ToggleSwitch x:Name="ChkPingOverlay" Checked="Setting_Changed" Unchecked="Setting_Changed" />
                     </ui:CardControl>
 
                     <ui:CardControl Margin="0,0,0,8">
