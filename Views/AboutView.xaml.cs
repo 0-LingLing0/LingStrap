@@ -8,12 +8,44 @@ namespace Lingstrap.Views;
 
 public partial class AboutView : Page
 {
+    private string? _pendingReleaseUrl;
+
     public AboutView()
     {
         InitializeComponent();
 
         var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.1.0";
         InfoText.Text = $"Version {version}\nData folder: {Paths.Root}";
+    }
+
+    private async void CheckForUpdates_Click(object sender, RoutedEventArgs e)
+    {
+        CheckUpdateButton.IsEnabled = false;
+        OpenReleaseButton.Visibility = Visibility.Collapsed;
+        UpdateStatusText.Text = "Checking...";
+
+        var result = await UpdateCheckerService.CheckForUpdateAsync();
+
+        UpdateStatusText.Text = result.Status switch
+        {
+            UpdateCheckerService.UpdateStatus.UpToDate => $"You're up to date (v{result.LatestVersion}).",
+            UpdateCheckerService.UpdateStatus.UpdateAvailable => $"Version {result.LatestVersion} is available - you're on an older one.",
+            _ => result.Message ?? "Could not check for updates.",
+        };
+
+        if (result.Status == UpdateCheckerService.UpdateStatus.UpdateAvailable && result.ReleaseUrl != null)
+        {
+            _pendingReleaseUrl = result.ReleaseUrl;
+            OpenReleaseButton.Visibility = Visibility.Visible;
+        }
+
+        CheckUpdateButton.IsEnabled = true;
+    }
+
+    private void OpenRelease_Click(object sender, RoutedEventArgs e)
+    {
+        if (_pendingReleaseUrl != null)
+            Process.Start(new ProcessStartInfo { FileName = _pendingReleaseUrl, UseShellExecute = true });
     }
 
     private void OpenLogs_Click(object sender, RoutedEventArgs e)

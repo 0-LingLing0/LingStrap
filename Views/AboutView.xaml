@@ -20,6 +20,20 @@
             <ui:CardControl Margin="0,0,0,8">
                 <ui:CardControl.Header>
                     <StackPanel>
+                        <TextBlock Text="Check for updates" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                        <TextBlock x:Name="UpdateStatusText" Style="{StaticResource Sub}" Margin="0,4,0,0" MaxWidth="450" />
+                    </StackPanel>
+                </ui:CardControl.Header>
+                <StackPanel Orientation="Horizontal">
+                    <ui:Button x:Name="CheckUpdateButton" Content="Check now" Click="CheckForUpdates_Click" VerticalAlignment="Center" />
+                    <ui:Button x:Name="OpenReleaseButton" Content="Open release page" Visibility="Collapsed"
+                               Margin="8,0,0,0" Click="OpenRelease_Click" VerticalAlignment="Center" />
+                </StackPanel>
+            </ui:CardControl>
+
+            <ui:CardControl Margin="0,0,0,8">
+                <ui:CardControl.Header>
+                    <StackPanel>
                         <TextBlock Text="Force a clean reinstall" Style="{StaticResource Body}" FontWeight="SemiBold" />
                         <TextBlock Style="{StaticResource Sub}" Margin="0,4,0,0" MaxWidth="450"
                                    Text="Deletes the entire current Roblox install so the next launch downloads and installs it completely fresh. Worth trying if Roblox crashes on startup or otherwise behaves oddly for no obvious reason - rules out a corrupted install." />
