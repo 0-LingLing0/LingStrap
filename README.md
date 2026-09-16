@@ -60,25 +60,6 @@ dotnet publish -c Release
 The installer lives in `Setup/` and builds/publishes the same way, targeting
 `Setup/Setup.csproj`.
 
-## Layout
-
-```
-App.xaml(.cs)        entry point - decides UI vs bootstrap vs watcher mode
-MainWindow.xaml(.cs) sidebar + page host
-Models/              settings object, presets, color themes, etc.
-Services/            paths, logging, settings, updater, network tuning, ...
-Views/               one page per sidebar item
-Setup/               the standalone LingstrapSetup.exe installer project
-```
-
-Settings live in `%LOCALAPPDATA%\Lingstrap\Settings.json`.
-
-CI (`.github/workflows/build.yml`) builds both exes on every push, and
-publishing a version tag (`v*`) cuts a GitHub Release: the public release
-only ever has `LingstrapSetup.exe` attached, while `Lingstrap.exe` itself
-lives in a separate, always-overwritten internal release that the installer
-and updater fetch from directly.
-
 ## Notes
 
 Since Roblox's FastFlag allowlist (Sept 2025), most locally set flags are
