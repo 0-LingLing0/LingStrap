@@ -142,7 +142,8 @@ public static class InstallerService
             try { File.Delete(tempPath); } catch { /* best effort */ }
         }
 
-        CreateStartMenuShortcut();
+        CreateShortcut(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.StartMenu), "Programs", "Lingstrap.lnk"));
+        CreateShortcut(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Lingstrap.lnk"));
     }
 
     /// <summary>Asks any already-running Lingstrap to close normally (so it still saves its settings
@@ -165,13 +166,10 @@ public static class InstallerService
         }
     }
 
-    private static void CreateStartMenuShortcut()
+    private static void CreateShortcut(string shortcutPath)
     {
         try
         {
-            var startMenu = Environment.GetFolderPath(Environment.SpecialFolder.StartMenu);
-            var shortcutPath = Path.Combine(startMenu, "Programs", "Lingstrap.lnk");
-
             var shellType = Type.GetTypeFromProgID("WScript.Shell") ?? throw new InvalidOperationException("WScript.Shell unavailable.");
             var shell = Activator.CreateInstance(shellType)!;
             var shortcut = shellType.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, null, shell, new object[] { shortcutPath })!;
