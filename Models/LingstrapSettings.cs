@@ -19,8 +19,14 @@ public class LingstrapSettings
     public const int CurrentSchemaVersion = 2;
 
     // --- Appearance ------------------------------------------------------
-    /// <summary>Name of a ColorTheme in ColorThemeCatalog.All. Falls back to the first entry if unknown.</summary>
+    /// <summary>Name of a ColorTheme in ColorThemeCatalog.All, or ColorThemeCatalog.CustomThemeName
+    /// ("Custom") when CustomAccentColor should be used instead. Falls back to the first entry if
+    /// unknown.</summary>
     public string AccentTheme { get; set; } = "Violet";
+
+    /// <summary>The "RRGGBB" hex color picked via the Appearance page's custom color picker. Only
+    /// meaningful when AccentTheme is ColorThemeCatalog.CustomThemeName.</summary>
+    public string? CustomAccentColor { get; set; }
 
     // --- Presets -------------------------------------------------------
     public Preset ActivePreset { get; set; } = Preset.Balanced;

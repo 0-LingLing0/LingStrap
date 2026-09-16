@@ -1,6 +1,8 @@
+using System;
 using System.Linq;
 using System.Windows;
 using System.Windows.Media;
+using Lingstrap.Services;
 
 namespace Lingstrap.Models;
 
@@ -14,6 +16,10 @@ public record ColorTheme(string Name, Color Base, Color Light, Color Dark);
 
 public static class ColorThemeCatalog
 {
+    /// <summary>Sentinel AccentTheme name meaning "use LingstrapSettings.CustomAccentColor instead of
+    /// a catalog entry" - see LingstrapSettings.CustomAccentColor and FromCustomColor below.</summary>
+    public const string CustomThemeName = "Custom";
+
     public static readonly ColorTheme[] All =
     {
         new("Violet", Color.FromRgb(0xA7, 0x78, 0xFF), Color.FromRgb(0xC7, 0xA9, 0xFF), Color.FromRgb(0x58, 0x30, 0xB4)),
@@ -34,9 +40,46 @@ public static class ColorThemeCatalog
         All.FirstOrDefault(t => t.Name == name) ?? All[0];
 
     /// <summary>
+    /// Builds a ColorTheme for a user-picked custom color. There's no hand-tuned Light/Dark pair for
+    /// an arbitrary color the way there is for the catalog above, so this derives both algorithmically
+    /// in HSL space - lightening/darkening while holding hue and saturation constant, the same
+    /// direction the hand-picked catalog entries follow (e.g. Violet's Dark is a deeper, not muddier,
+    /// purple - not just "add black").
+    /// </summary>
+    public static ColorTheme FromCustomColor(Color accent)
+    {
+        var (hue, sat, lightness) = IconRecolorService.RgbToHsl(accent.R, accent.G, accent.B);
+
+        var lightL = Math.Min(lightness + 0.18, 0.88);
+        var darkL = Math.Max(lightness - 0.28, 0.15);
+
+        var (lr, lg, lb) = IconRecolorService.HslToRgb(hue, sat, lightL);
+        var (dr, dg, db) = IconRecolorService.HslToRgb(hue, sat, darkL);
+
+        return new ColorTheme(CustomThemeName, accent, Color.FromRgb(lr, lg, lb), Color.FromRgb(dr, dg, db));
+    }
+
+    /// <summary>
     /// The base color of whichever theme is currently applied, read back from the live resource
     /// ApplicationAccentColorManager.Apply just set - so callers always match what's on screen right
     /// now instead of going stale after the user switches themes on the Appearance page.
     /// </summary>
     public static Color CurrentAccentColor() => (Color)Application.Current.Resources["SystemAccentColor"];
+
+    /// <summary>Parses a "RRGGBB" hex string (as stored in LingstrapSettings.CustomAccentColor) back
+    /// into a Color, falling back to Violet's base color if the stored value is missing or malformed.</summary>
+    public static Color ParseCustomColor(string? hex)
+    {
+        if (hex != null && hex.Length == 6
+            && byte.TryParse(hex[..2], System.Globalization.NumberStyles.HexNumber, null, out var r)
+            && byte.TryParse(hex[2..4], System.Globalization.NumberStyles.HexNumber, null, out var g)
+            && byte.TryParse(hex[4..6], System.Globalization.NumberStyles.HexNumber, null, out var b))
+        {
+            return Color.FromRgb(r, g, b);
+        }
+
+        return All[0].Base;
+    }
+
+    public static string ToHex(Color color) => $"{color.R:X2}{color.G:X2}{color.B:X2}";
 }

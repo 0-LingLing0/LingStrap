@@ -116,7 +116,9 @@ public partial class App : Application
         // and tertiaryAccent reuses the icon's own darker gradient stop for depth.
         ApplicationThemeManager.Apply(ApplicationTheme.Dark, WindowBackdropType.Mica);
 
-        var accent = Models.ColorThemeCatalog.Find(SettingsService.Current.AccentTheme);
+        var accent = SettingsService.Current.AccentTheme == Models.ColorThemeCatalog.CustomThemeName
+            ? Models.ColorThemeCatalog.FromCustomColor(Models.ColorThemeCatalog.ParseCustomColor(SettingsService.Current.CustomAccentColor))
+            : Models.ColorThemeCatalog.Find(SettingsService.Current.AccentTheme);
         ApplicationAccentColorManager.Apply(accent.Base, accent.Light, accent.Base, accent.Dark);
 
         if (IsRobloxLaunch)

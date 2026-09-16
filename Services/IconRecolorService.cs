@@ -67,7 +67,9 @@ public static class IconRecolorService
         return result;
     }
 
-    private static (double Hue, double Sat, double Lightness) RgbToHsl(byte r8, byte g8, byte b8)
+    /// <summary>Shared with ColorThemeCatalog's custom-color Light/Dark derivation - internal rather
+    /// than private so that code doesn't need to duplicate this math.</summary>
+    internal static (double Hue, double Sat, double Lightness) RgbToHsl(byte r8, byte g8, byte b8)
     {
         double r = r8 / 255.0, g = g8 / 255.0, b = b8 / 255.0;
         var max = Math.Max(r, Math.Max(g, b));
@@ -88,7 +90,7 @@ public static class IconRecolorService
         return (h, s, l);
     }
 
-    private static (byte R, byte G, byte B) HslToRgb(double h, double s, double l)
+    internal static (byte R, byte G, byte B) HslToRgb(double h, double s, double l)
     {
         if (s == 0)
         {
