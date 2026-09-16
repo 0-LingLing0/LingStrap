@@ -1,0 +1,36 @@
+<Page x:Class="Lingstrap.Views.AboutView"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      Title="About">
+    <StackPanel Margin="28,24,28,24">
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                <ui:SymbolIcon Symbol="Info24" Style="{StaticResource HeaderIcon}" />
+                <TextBlock Text="About" Style="{StaticResource H1}" Margin="0" VerticalAlignment="Center" />
+            </StackPanel>
+            <TextBlock Style="{StaticResource Sub}" Text="Lingstrap - a Roblox bootstrapper." />
+
+            <ui:CardControl Margin="0,0,0,8">
+                <ui:CardControl.Header>
+                    <TextBlock x:Name="InfoText" Style="{StaticResource Body}" />
+                </ui:CardControl.Header>
+                <ui:Button Content="Open log folder" Click="OpenLogs_Click" VerticalAlignment="Center" />
+            </ui:CardControl>
+
+            <ui:CardControl Margin="0,0,0,8">
+                <ui:CardControl.Header>
+                    <StackPanel>
+                        <TextBlock Text="Force a clean reinstall" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                        <TextBlock Style="{StaticResource Sub}" Margin="0,4,0,0" MaxWidth="450"
+                                   Text="Deletes the entire current Roblox install so the next launch downloads and installs it completely fresh. Worth trying if Roblox crashes on startup or otherwise behaves oddly for no obvious reason - rules out a corrupted install." />
+                    </StackPanel>
+                </ui:CardControl.Header>
+                <ui:Button Content="Delete install" Click="ForceCleanReinstall_Click" VerticalAlignment="Center" />
+            </ui:CardControl>
+
+            <ui:CardControl IsHitTestVisible="False">
+                <TextBlock Style="{StaticResource Body}" Opacity="0.7" TextWrapping="Wrap"
+                           Text="Not affiliated with Roblox Corporation. Modifying your own client is your own risk - especially multi-instance, which Roblox does not support." />
+            </ui:CardControl>
+    </StackPanel>
+</Page>

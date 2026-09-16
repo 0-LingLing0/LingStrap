@@ -1,0 +1,193 @@
+<Page x:Class="Lingstrap.Views.BehaviourView"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      Title="Behaviour">
+    <StackPanel Margin="28,24,28,24">
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                <ui:SymbolIcon Symbol="Settings24" Style="{StaticResource HeaderIcon}" />
+                <TextBlock Text="Behaviour" Style="{StaticResource H1}" Margin="0" VerticalAlignment="Center" />
+            </StackPanel>
+            <TextBlock Style="{StaticResource Sub}" Text="How Lingstrap itself behaves around the client." />
+
+            <TextBlock Text="Launching" Style="{StaticResource SectionHeader}" Margin="0,4,0,10" />
+
+            <ui:CardControl Margin="0,0,0,8">
+                <ui:CardControl.Header>
+                    <StackPanel>
+                        <TextBlock Text="Show loading screen" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                        <TextBlock Style="{StaticResource Sub}" Margin="0,4,0,0" MaxWidth="450" Text="Off launches silently with no window at all." />
+                    </StackPanel>
+                </ui:CardControl.Header>
+                <ui:ToggleSwitch x:Name="ChkLoadingScreen" Checked="Setting_Changed" Unchecked="Setting_Changed" />
+            </ui:CardControl>
+
+            <ui:CardControl Margin="0,0,0,8">
+                <ui:CardControl.Header>
+                    <TextBlock Text="Close Lingstrap once Roblox starts" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                </ui:CardControl.Header>
+                <ui:ToggleSwitch x:Name="ChkCloseOnLaunch" Checked="Setting_Changed" Unchecked="Setting_Changed" />
+            </ui:CardControl>
+
+            <ui:CardControl Margin="0,0,0,8">
+                <ui:CardControl.Header>
+                    <TextBlock Text="Close the Roblox crash handler" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                </ui:CardControl.Header>
+                <ui:ToggleSwitch x:Name="ChkCrashHandler" Checked="Setting_Changed" Unchecked="Setting_Changed" />
+            </ui:CardControl>
+
+            <ui:CardControl Margin="0,0,0,8">
+                <ui:CardControl.Header>
+                    <StackPanel>
+                        <TextBlock Text="Process priority" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                        <TextBlock Style="{StaticResource Sub}" Margin="0,4,0,0" MaxWidth="450"
+                                   Text="Set by whichever preset is active. Changing it switches you to Custom." />
+                    </StackPanel>
+                </ui:CardControl.Header>
+                <ComboBox x:Name="PriorityCombo" Width="140" SelectionChanged="PriorityCombo_SelectionChanged">
+                    <ComboBoxItem Content="Normal" />
+                    <ComboBoxItem Content="Above Normal" />
+                    <ComboBoxItem Content="High" />
+                </ComboBox>
+            </ui:CardControl>
+
+            <ui:CardControl Margin="0,0,0,8">
+                <ui:CardControl.Header>
+                    <StackPanel>
+                        <TextBlock Text="Allow multi-instance launching" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                        <TextBlock Style="{StaticResource Sub}" Margin="0,4,0,0" MaxWidth="450"
+                                   Text="Holds Roblox's singleton mutex so more than one client can run. Roblox actively works against this, so it can break at any update." />
+                    </StackPanel>
+                </ui:CardControl.Header>
+                <ui:ToggleSwitch x:Name="ChkMulti" Checked="Setting_Changed" Unchecked="Setting_Changed" />
+            </ui:CardControl>
+
+            <TextBlock Text="Performance" Style="{StaticResource SectionHeader}" />
+
+            <ui:CardControl Margin="0,0,0,8">
+                <ui:CardControl.Header>
+                    <StackPanel>
+                        <TextBlock Text="Force dedicated GPU" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                        <TextBlock Style="{StaticResource Sub}" Margin="0,4,0,0" MaxWidth="450"
+                                   Text="Tells Windows to run Roblox on your discrete GPU instead of the integrated one, on laptops with both." />
+                    </StackPanel>
+                </ui:CardControl.Header>
+                <ui:ToggleSwitch x:Name="ChkDedicatedGpu" Checked="Setting_Changed" Unchecked="Setting_Changed" />
+            </ui:CardControl>
+
+            <ui:CardControl Margin="0,0,0,8">
+                <ui:CardControl.Header>
+                    <StackPanel>
+                        <TextBlock Text="Pin clients to separate cores when running more than one" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                        <TextBlock Style="{StaticResource Sub}" Margin="0,4,0,0" MaxWidth="450"
+                                   Text="Only matters with multi-instance. A single client always gets every core - never pinned." />
+                    </StackPanel>
+                </ui:CardControl.Header>
+                <ui:ToggleSwitch x:Name="ChkPinCores" Checked="Setting_Changed" Unchecked="Setting_Changed" />
+            </ui:CardControl>
+
+            <ui:CardControl x:Name="CpuPinningCard" Margin="0,0,0,8" Visibility="Collapsed" IsHitTestVisible="False">
+                <ui:CardControl.Header>
+                    <StackPanel>
+                        <TextBlock Text="Current pinning" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                        <StackPanel x:Name="CpuAssignmentsPanel" Margin="0,6,0,0" />
+                    </StackPanel>
+                </ui:CardControl.Header>
+            </ui:CardControl>
+
+            <ui:CardExpander Margin="0,0,0,8">
+                <ui:CardExpander.Icon>
+                    <ui:SymbolIcon Symbol="Router24" />
+                </ui:CardExpander.Icon>
+                <ui:CardExpander.Header>
+                    <TextBlock Text="Network optimization" Style="{StaticResource Body}" FontWeight="SemiBold" FontSize="15" />
+                </ui:CardExpander.Header>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource Sub}" Margin="0,0,0,12" MaxWidth="500" TextWrapping="Wrap"
+                               Text="A few things aimed at lowering in-game ping: disables power-saving on your network adapter, removes Windows' own default cap on network packet processing, turns off Energy-Efficient Ethernet / Interrupt Moderation where your network driver exposes them, frees up the bandwidth QoS reserves by default, and stops Windows Update from uploading/downloading update chunks to and from other PCs in the background. These are system-wide changes (not scoped to just Roblox) and need administrator rights - Windows will ask for confirmation. Every value it touches is backed up first, so Restore below puts it all back exactly - no need to undo any of this by hand." />
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="Optimize network for lower ping" Click="OptimizeNetwork_Click" HorizontalAlignment="Left" />
+                        <Button x:Name="RestoreNetworkButton" Content="Restore" Margin="8,0,0,0" Click="RestoreNetwork_Click" HorizontalAlignment="Left" />
+                    </StackPanel>
+                </StackPanel>
+            </ui:CardExpander>
+
+            <TextBlock Text="Window" Style="{StaticResource SectionHeader}" />
+
+            <ui:CardExpander Margin="0,0,0,8">
+                <ui:CardExpander.Icon>
+                    <ui:SymbolIcon Symbol="DualScreen24" />
+                </ui:CardExpander.Icon>
+                <ui:CardExpander.Header>
+                    <TextBlock Text="Preferred launch monitor" Style="{StaticResource Body}" FontWeight="SemiBold" FontSize="15" />
+                </ui:CardExpander.Header>
+                <StackPanel>
+                    <TextBlock Style="{StaticResource Sub}" Margin="0,0,0,12" MaxWidth="450"
+                               Text="Moves Roblox onto this monitor as soon as its window appears. Only matters if you have more than one - click a monitor below to pick it." />
+                    <Border Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                            BorderThickness="1" CornerRadius="6" Padding="12" HorizontalAlignment="Left">
+                        <Canvas x:Name="MonitorMapCanvas" />
+                    </Border>
+                    <Button Content="Use whichever monitor Windows opens it on" Margin="0,10,0,0"
+                            HorizontalAlignment="Left" Click="UseDefaultMonitor_Click" />
+                </StackPanel>
+            </ui:CardExpander>
+
+            <TextBlock Text="Server info and presence" Style="{StaticResource SectionHeader}" />
+
+            <ui:CardExpander Margin="0,0,0,8">
+                <ui:CardExpander.Icon>
+                    <ui:SymbolIcon Symbol="Location24" />
+                </ui:CardExpander.Icon>
+                <ui:CardExpander.Header>
+                    <TextBlock Text="Server info" Style="{StaticResource Body}" FontWeight="SemiBold" FontSize="15" />
+                </ui:CardExpander.Header>
+                <StackPanel>
+                    <ui:CardControl Margin="0,0,0,8">
+                        <ui:CardControl.Header>
+                            <StackPanel>
+                                <TextBlock Text="Show server info on join" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                                <TextBlock Style="{StaticResource Sub}" Margin="0,4,0,0" MaxWidth="450"
+                                           Text="Master switch - captures where the server is when you join. Turn this off and the banner below stops too." />
+                            </StackPanel>
+                        </ui:CardControl.Header>
+                        <ui:ToggleSwitch x:Name="ChkServerLocation" Checked="Setting_Changed" Unchecked="Setting_Changed" />
+                    </ui:CardControl>
+
+                    <ui:CardControl Margin="0,0,0,8">
+                        <ui:CardControl.Header>
+                            <TextBlock Text="Show an overlay banner on join" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                        </ui:CardControl.Header>
+                        <ui:ToggleSwitch x:Name="ChkNotification" Checked="Setting_Changed" Unchecked="Setting_Changed" />
+                    </ui:CardControl>
+
+                    <ui:CardControl x:Name="BannerDurationCard" Margin="0,0,0,8">
+                        <ui:CardControl.Header>
+                            <TextBlock Text="How long the banner stays open" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                        </ui:CardControl.Header>
+                        <StackPanel Orientation="Horizontal">
+                            <Slider x:Name="BannerDurationSlider" Width="150" Minimum="1" Maximum="10" VerticalAlignment="Center"
+                                    IsSnapToTickEnabled="True" TickFrequency="1" SmallChange="1"
+                                    ValueChanged="BannerDurationSlider_ValueChanged"
+                                    PreviewMouseUp="BannerDurationSlider_MouseUp" LostKeyboardFocus="BannerDurationSlider_LostFocus" />
+                            <ui:NumberBox x:Name="BannerDurationBox" Width="64" Margin="10,0,6,0"
+                                          SpinButtonPlacementMode="Hidden" ClearButtonEnabled="False"
+                                          LostKeyboardFocus="BannerDurationBox_LostFocus" PreviewKeyDown="NumberBox_EnterCommits" />
+                            <TextBlock Text="seconds" VerticalAlignment="Center" Opacity="0.7" />
+                        </StackPanel>
+                    </ui:CardControl>
+                </StackPanel>
+            </ui:CardExpander>
+
+            <ui:CardControl Margin="0,0,0,8">
+                <ui:CardControl.Header>
+                    <StackPanel>
+                        <TextBlock Text="Discord Rich Presence" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                        <TextBlock Style="{StaticResource Sub}" Margin="0,4,0,0" MaxWidth="450"
+                                   Text="Shows &quot;Playing Lingstrap&quot; on your Discord profile instead of Roblox's own status." />
+                    </StackPanel>
+                </ui:CardControl.Header>
+                <ui:ToggleSwitch x:Name="ChkDiscord" Checked="Setting_Changed" Unchecked="Setting_Changed" />
+            </ui:CardControl>
+    </StackPanel>
+</Page>

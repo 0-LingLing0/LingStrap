@@ -1,0 +1,57 @@
+<Page x:Class="Lingstrap.Views.PresetsView"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      Title="Presets">
+    <StackPanel Margin="28,24,28,24">
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                <ui:SymbolIcon Symbol="Options24" Style="{StaticResource HeaderIcon}" />
+                <TextBlock Text="Presets" Style="{StaticResource H1}" Margin="0" VerticalAlignment="Center" />
+            </StackPanel>
+            <TextBlock Style="{StaticResource Sub}"
+                       Text="One choice that sets every flag and setting underneath it." />
+
+            <ui:CardAction x:Name="TileQuality" Tag="BestQuality" Click="Preset_Click" Margin="0,0,0,8">
+                <ui:CardAction.Icon>
+                    <ui:SymbolIcon Symbol="Star24" />
+                </ui:CardAction.Icon>
+                <StackPanel>
+                    <TextBlock Text="Best Quality" FontWeight="SemiBold" FontSize="15" />
+                    <TextBlock Text="Everything on. Full lighting, shadows and textures."
+                               FontSize="12" Opacity="0.7" Margin="0,3,0,0" />
+                </StackPanel>
+            </ui:CardAction>
+
+            <ui:CardAction x:Name="TileBalanced" Tag="Balanced" Click="Preset_Click" Margin="0,0,0,8">
+                <ui:CardAction.Icon>
+                    <ui:SymbolIcon Symbol="Scales24" />
+                </ui:CardAction.Icon>
+                <StackPanel>
+                    <TextBlock Text="Balanced" FontWeight="SemiBold" FontSize="15" />
+                    <TextBlock Text="Normal looking game, expensive effects stripped."
+                               FontSize="12" Opacity="0.7" Margin="0,3,0,0" />
+                </StackPanel>
+            </ui:CardAction>
+
+            <ui:CardAction x:Name="TilePerformance" Tag="BestPerformance" Click="Preset_Click" Margin="0,0,0,20">
+                <ui:CardAction.Icon>
+                    <ui:SymbolIcon Symbol="Rocket24" />
+                </ui:CardAction.Icon>
+                <StackPanel>
+                    <TextBlock Text="Best Performance" FontWeight="SemiBold" FontSize="15" />
+                    <TextBlock Text="Frames over looks. Effects off, FPS uncapped."
+                               FontSize="12" Opacity="0.7" Margin="0,3,0,0" />
+                </StackPanel>
+            </ui:CardAction>
+
+            <ui:CardControl IsHitTestVisible="False">
+                <ui:CardControl.Header>
+                    <StackPanel>
+                        <TextBlock x:Name="CurrentText" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                        <TextBlock x:Name="CurrentDesc" Style="{StaticResource Body}" MaxWidth="500"
+                                   Opacity="0.7" Margin="0,6,0,0" />
+                    </StackPanel>
+                </ui:CardControl.Header>
+            </ui:CardControl>
+    </StackPanel>
+</Page>

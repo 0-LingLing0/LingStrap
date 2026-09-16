@@ -1,0 +1,62 @@
+<Page x:Class="Lingstrap.Views.GlobalSettingsView"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      Title="Roblox Settings">
+    <StackPanel Margin="28,24,28,24">
+            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                <ui:SymbolIcon Symbol="Wrench24" Style="{StaticResource HeaderIcon}" />
+                <TextBlock Text="Roblox Settings" Style="{StaticResource H1}" Margin="0" VerticalAlignment="Center" />
+            </StackPanel>
+            <TextBlock Style="{StaticResource Sub}" MaxWidth="700"
+                       Text="Every setting Roblox keeps in GlobalBasicSettings_13.xml, read straight from the file." />
+
+            <ui:CardControl x:Name="RunningBanner" Margin="0,0,0,16" Visibility="Collapsed" IsHitTestVisible="False">
+                <ui:CardControl.Header>
+                    <StackPanel Orientation="Horizontal">
+                        <ui:SymbolIcon Symbol="Warning24" Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+                        <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" MaxWidth="500" TextWrapping="Wrap"
+                                   Text="Roblox is running - changes will be applied the next time you launch." />
+                    </StackPanel>
+                </ui:CardControl.Header>
+            </ui:CardControl>
+
+            <ui:CardControl x:Name="ErrorCard" Margin="0,0,0,16" Visibility="Collapsed" IsHitTestVisible="False">
+                <ui:CardControl.Header>
+                    <StackPanel>
+                        <TextBlock Text="Can't read GlobalBasicSettings_13.xml" FontWeight="SemiBold" />
+                        <TextBlock x:Name="ErrorText" Style="{StaticResource Sub}" Margin="0,4,0,0" MaxWidth="500" />
+                    </StackPanel>
+                </ui:CardControl.Header>
+            </ui:CardControl>
+
+            <StackPanel x:Name="ContentPanel">
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                    <ui:TextBox x:Name="SearchBox" Width="280" PlaceholderText="Search settings by name"
+                                TextChanged="SearchBox_TextChanged" />
+                    <ui:Button x:Name="RestoreOriginalButton" Content="Restore original" Margin="12,0,0,0" Click="RestoreOriginal_Click" />
+                </StackPanel>
+
+                <TextBlock Text="Common settings" Style="{StaticResource Body}" FontWeight="SemiBold" Margin="0,0,0,10" />
+                <StackPanel x:Name="ShortlistPanel" Margin="0,0,0,20" />
+
+                <ui:CardExpander Header="Annoyances" IsExpanded="False" Margin="0,0,0,20">
+                    <ui:CardExpander.Icon>
+                        <ui:SymbolIcon Symbol="Broom24" />
+                    </ui:CardExpander.Icon>
+                    <StackPanel x:Name="AnnoyancesPanel" />
+                </ui:CardExpander>
+
+                <ui:CardExpander x:Name="AdvancedExpander" Header="Advanced - all other settings" IsExpanded="False">
+                    <ui:CardExpander.Icon>
+                        <ui:SymbolIcon Symbol="Settings24" />
+                    </ui:CardExpander.Icon>
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource Sub}" Margin="0,0,0,14" MaxWidth="600" TextWrapping="Wrap"
+                                   Text="Everything else Roblox happens to have written to this file - shown raw, unfiltered, exactly as found. Unlike Common settings and Annoyances above (which Lingstrap has actually checked have a real effect), most of what's down here is Roblox's own internal/cached client state - things it still writes for its own bookkeeping but doesn't necessarily read back as a live setting any more. Editing one might do nothing at all. There's no reliable way to tell which from outside Roblox's own client code, so treat this section as experimental." />
+                        <StackPanel x:Name="GroupsPanel" />
+                    </StackPanel>
+                </ui:CardExpander>
+            </StackPanel>
+    </StackPanel>
+</Page>

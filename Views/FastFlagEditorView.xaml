@@ -1,0 +1,51 @@
+<Page x:Class="Lingstrap.Views.FastFlagEditorView"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      Title="FastFlag Editor">
+    <StackPanel Margin="28,24,28,24">
+        <ui:Button Content="Back to FastFlags" Icon="{ui:SymbolIcon ArrowLeft24}" Appearance="Transparent"
+                   HorizontalAlignment="Left" Margin="0,0,0,14" Click="BackToFastFlags_Click" />
+
+        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+            <ui:SymbolIcon Symbol="Code24" Style="{StaticResource HeaderIcon}" />
+            <TextBlock Text="FastFlag Editor" Style="{StaticResource H1}" Margin="0" VerticalAlignment="Center" />
+        </StackPanel>
+        <TextBlock Style="{StaticResource Sub}" MaxWidth="700"
+                   Text="Every flag, raw. Since September 2025 Roblox's own allow-list silently ignores any flag that isn't on it - the 18 known ones below are confirmed to still be allowlisted; anything else typed in still saves and might work too, but Lingstrap has no way to check Roblox's full list, so it's shown muted with a warning instead of a promise either way." />
+
+        <ui:TextBox x:Name="SearchBox" PlaceholderText="Search by name" Margin="0,4,0,10"
+                    TextChanged="SearchBox_TextChanged" />
+
+        <WrapPanel Margin="0,0,0,2">
+            <ui:Button Content="Add" Icon="{ui:SymbolIcon Add24}" Margin="0,0,8,8" Click="Add_Click" />
+            <ui:Button Content="Delete selected" Icon="{ui:SymbolIcon Delete24}" Margin="0,0,8,8" Click="DeleteSelected_Click" />
+            <ui:Button Content="Import JSON" Icon="{ui:SymbolIcon ArrowImport24}" Margin="0,0,8,8" Click="Import_Click" />
+            <ui:Button Content="Export JSON" Icon="{ui:SymbolIcon ArrowExport24}" Margin="0,0,8,8" Click="Export_Click" />
+            <ui:Button x:Name="OpenClientAppSettingsButton" Content="Open ClientAppSettings.json" Icon="{ui:SymbolIcon DocumentFolder24}" Margin="0,0,8,8" Click="OpenClientAppSettings_Click" />
+            <ui:Button Content="Reset all" Icon="{ui:SymbolIcon ArrowReset24}" Margin="0,0,8,8" Click="ResetAll_Click" />
+        </WrapPanel>
+
+        <Grid>
+            <DataGrid x:Name="Grid" AutoGenerateColumns="False" CanUserAddRows="False"
+                      HeadersVisibility="Column" GridLinesVisibility="Horizontal"
+                      RowHeaderWidth="0" MinHeight="200" MaxHeight="900"
+                      LoadingRow="Grid_LoadingRow" CellEditEnding="Grid_CellEditEnding">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="2*" />
+                    <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*" />
+                    <DataGridCheckBoxColumn Header="Enabled" Binding="{Binding Enabled}" Width="70" />
+                </DataGrid.Columns>
+            </DataGrid>
+
+            <StackPanel x:Name="EmptyState" HorizontalAlignment="Center" VerticalAlignment="Top"
+                        Margin="0,40,0,0" IsHitTestVisible="False" Visibility="Collapsed">
+                <ui:SymbolIcon Symbol="Flag24" FontSize="28" Opacity="0.5" HorizontalAlignment="Center" />
+                <TextBlock Text="No custom FastFlags yet" Style="{StaticResource Body}" FontWeight="SemiBold"
+                           HorizontalAlignment="Center" Margin="0,10,0,4" />
+                <TextBlock Text="Click Add to create one, or Import JSON to bring in a set." Style="{StaticResource Sub}"
+                           HorizontalAlignment="Center" Margin="0" />
+            </StackPanel>
+        </Grid>
+    </StackPanel>
+</Page>
