@@ -24,23 +24,35 @@ Requires Windows 10/11 and the
 
 ## Features
 
-- **Presets** — curated flag/graphics bundles (e.g. best performance, best
-  quality) applied on launch
+- **Presets** — three curated flag/graphics bundles (best performance,
+  balanced, best quality) applied on launch, plus a **My Presets** tab to
+  save your own: captures every enabled FastFlag, the same graphics settings
+  the built-in presets manage, and process priority into a named preset you
+  can re-apply, rename, or delete later
 - **FastFlags** — hand-edit individual flags, on top of whatever preset is
   active
 - **Mods and cursors** — swap in custom cursors, sounds, fonts, and splash
   images; per-slot size scaling
 - **Multi-instance** — run more than one Roblox client at once
 - **Behaviour tuning** — CPU core pinning, process priority, GPU selection,
-  network optimization (adapter power saving, packet throttling, QoS), with
-  a one-click restore for the network changes
+  preferred launch monitor, network optimization (adapter power saving,
+  packet throttling, QoS) with a one-click restore, and launch/close
+  behavior (skip the loading screen, close Lingstrap once Roblox starts,
+  reopen it once Roblox closes)
+- **Server info and Discord Rich Presence** — an in-game overlay banner
+  showing the city/country of the server you joined, and/or Discord Rich
+  Presence reporting "Playing Lingstrap" with the current place
+- **FPS overlay** — a small always-on-top, click-through frame-rate counter
+  over the Roblox window, measured from outside the process; the one-time
+  administrator approval it needs is asked for once, not on every launch
 - **Companion apps** — launch other programs alongside Roblox, closed when
   it closes
 - **Appearance** — pick an accent color (or any custom color via the
   built-in picker), light or dark theme, and a UI scale setting
-- **Self-updating** — checks GitHub for new releases on startup, can notify
-  you or install silently, and updates itself via the same tiny installer
-  used to install it in the first place
+- **Self-updating** — checks GitHub for new releases on startup; Notify mode
+  prompts every launch until you actually update, AutoInstall updates
+  silently and shows what's new on the next launch, both via the same tiny
+  installer used to install it in the first place
 
 ## Building from source
 
