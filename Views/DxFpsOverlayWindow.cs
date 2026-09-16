@@ -95,6 +95,9 @@ public sealed class DxFpsOverlayWindow : IDisposable
         [DllImport("user32.dll")]
         public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
+        [DllImport("user32.dll")]
+        public static extern IntPtr GetForegroundWindow();
+
         [DllImport("kernel32.dll")]
         public static extern IntPtr GetModuleHandle(string? lpModuleName);
     }
@@ -118,6 +121,7 @@ public sealed class DxFpsOverlayWindow : IDisposable
     private System.Windows.Threading.DispatcherTimer? _followTimer;
     private bool _isHidden;
     private System.Windows.Rect? _lastRobloxRect;
+    private bool _wasRobloxForeground;
 
     public DxFpsOverlayWindow(IntPtr robloxHwnd)
     {
@@ -211,7 +215,12 @@ public sealed class DxFpsOverlayWindow : IDisposable
         var accent = accentTheme.Base;
         var isLight = SettingsService.Current.LightTheme;
 
-        _textBrush.Color = new Color4(accent.R / 255f, accent.G / 255f, accent.B / 255f, 1f);
+        // The number itself is plain white/near-black (not the accent) - against a background as
+        // busy and varied as a live game, an accent-colored number was hard to read at a glance;
+        // white (or near-black on the light theme) keeps solid contrast against the pill's own
+        // fixed dark/light background regardless of what's behind the overlay. The accent still
+        // comes through in the pill's border, so it isn't lost, just no longer carried by the text.
+        _textBrush.Color = isLight ? new Color4(0.106f, 0.106f, 0.122f, 1f) : new Color4(1f, 1f, 1f, 1f);
         _backgroundBrush.Color = isLight
             ? new Color4(1f, 1f, 1f, 0.85f)
             : new Color4(0.086f, 0.09f, 0.122f, 0.85f); // #16171F, same dark base the app itself uses
@@ -279,13 +288,15 @@ public sealed class DxFpsOverlayWindow : IDisposable
     /// thread purely for its timer/thread-marshaling machinery, not for any rendering. Also hides
     /// this window whenever Roblox itself isn't currently visible (minimized) rather than leaving it
     /// floating alone at its last position, and re-asserts z-order (see PlaceAboveRoblox) whenever
-    /// Roblox's rect actually changes - covers restoring from minimized, moving the window, and
-    /// entering/leaving (borderless) fullscreen, all of which can bump Roblox back above this
-    /// window in the stacking order. Deliberately NOT done unconditionally on every tick - that was
+    /// Roblox's rect changes OR its foreground/focus state changes - restoring from minimized,
+    /// moving the window, entering/leaving (borderless) fullscreen, and alt-tabbing away from and
+    /// back to a fullscreen Roblox can all bump it back above this window in the stacking order, and
+    /// the focus-only case in particular changes neither position nor size, so the rect check alone
+    /// doesn't catch it. Deliberately NOT done unconditionally on every tick either way - that was
     /// tried first and made Roblox's own fullscreen-detection logic think a window kept appearing
     /// above it over and over, 60 times a second, which made ROBLOX ITSELF visibly flicker in and
-    /// out of fullscreen on its own. Only re-asserting when the rect has genuinely changed keeps
-    /// this to real, occasional events instead of a continuous fight over z-order.
+    /// out of fullscreen on its own. Only re-asserting on an actual change keeps this to real,
+    /// occasional events instead of a continuous fight over z-order.
     /// </summary>
     public void StartFollowing()
     {
@@ -297,18 +308,21 @@ public sealed class DxFpsOverlayWindow : IDisposable
         {
             if (RobloxWindowLocator.GetClientRectPhysicalQuiet(_robloxHwnd) is { } rect)
             {
+                var isForeground = Native.GetForegroundWindow() == _robloxHwnd;
+
                 if (_isHidden)
                 {
                     Native.ShowWindow(_hwnd, SW_SHOWNOACTIVATE);
                     PlaceAboveRoblox();
                     _isHidden = false;
                 }
-                else if (_lastRobloxRect is not { } last || last != rect)
+                else if (_lastRobloxRect is not { } last || last != rect || isForeground != _wasRobloxForeground)
                 {
                     PlaceAboveRoblox();
                 }
 
                 _lastRobloxRect = rect;
+                _wasRobloxForeground = isForeground;
                 Reposition(rect);
             }
             else if (!_isHidden)

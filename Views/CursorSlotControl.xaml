@@ -39,7 +39,7 @@
                  extends the track slightly past the column bounds so the thumb's outer edge actually
                  reaches it instead. -->
             <Slider x:Name="ScaleSlider" Minimum="25" Maximum="200" SmallChange="1" LargeChange="10"
-                    IsSnapToTickEnabled="True" TickFrequency="1" Margin="-9,2,-9,0"
+                    IsSnapToTickEnabled="True" TickFrequency="1" Padding="0" Margin="-14,2,-14,0"
                     ValueChanged="ScaleSlider_ValueChanged" />
             <TextBlock x:Name="ScaleSizeText" FontSize="11" Opacity="0.65" HorizontalAlignment="Center" Margin="0,2,0,0" />
         </StackPanel>
