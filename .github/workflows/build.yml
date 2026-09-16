@@ -71,7 +71,10 @@ jobs:
           }
           $log = git log $range --pretty=format:"- %s" --no-merges
           if ([string]::IsNullOrWhiteSpace($log)) { $log = "No notable changes." }
-          $log | Out-File -FilePath changelog.txt -Encoding utf8
+          # Both exes have to stay attached for LingstrapSetup.exe and the in-app update checker to
+          # work, but a person landing on this page by hand should only ever grab the small one.
+          $intro = "**Download ``LingstrapSetup.exe``** - that's the only file you need, it installs everything else automatically.`n"
+          "$intro`n$log" | Out-File -FilePath changelog.txt -Encoding utf8
 
       # Only runs when a version tag (e.g. v0.2.0) is pushed - turns that build into a public
       # GitHub Release with both exes attached, which is what the update checker and the tiny
