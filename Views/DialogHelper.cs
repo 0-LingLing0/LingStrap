@@ -56,4 +56,31 @@ public static class DialogHelper
         var result = await dialog.ShowAsync();
         return result == ContentDialogResult.Primary;
     }
+
+    /// <summary>A single-line text prompt - e.g. naming a new saved preset. Returns the trimmed text,
+    /// or null if cancelled or empty.</summary>
+    public static async Task<string?> ShowInputAsync(FrameworkElement owner, string title, string placeholder = "",
+        string defaultValue = "", string confirmText = "Save")
+    {
+        var host = ContentDialogHost.GetForWindow(Window.GetWindow(owner));
+        if (host == null) return null;
+
+        var textBox = new Wpf.Ui.Controls.TextBox { Text = defaultValue, PlaceholderText = placeholder };
+
+        var dialog = new ContentDialog(host)
+        {
+            Title = title,
+            Content = textBox,
+            PrimaryButtonText = confirmText,
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary,
+        };
+        dialog.Loaded += (_, _) => { textBox.Focus(); textBox.SelectAll(); };
+
+        var result = await dialog.ShowAsync();
+        if (result != ContentDialogResult.Primary) return null;
+
+        var text = textBox.Text?.Trim();
+        return string.IsNullOrEmpty(text) ? null : text;
+    }
 }

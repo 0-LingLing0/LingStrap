@@ -38,6 +38,14 @@ public class LingstrapSettings
 
     // --- Presets -------------------------------------------------------
     public Preset ActivePreset { get; set; } = Preset.Balanced;
+    /// <summary>User-saved full presets (FastFlags + graphics settings + process priority captured
+    /// together), alongside the three built-in ones.</summary>
+    public List<SavedPreset> SavedPresets { get; set; } = new();
+    /// <summary>Which SavedPresets entry (by Id) is currently applied, if any - tracked separately
+    /// from ActivePreset since a saved custom preset still reads as Preset.Custom there, same as any
+    /// other hand-edited state. Cleared whenever a built-in preset is applied or anything is edited
+    /// by hand (see PresetService).</summary>
+    public string? ActiveSavedPresetId { get; set; }
 
     // --- Performance ---------------------------------------------------
     public string Renderer { get; set; } = "D3D11";   // D3D11 | Vulkan | OpenGL

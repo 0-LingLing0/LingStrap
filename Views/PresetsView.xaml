@@ -11,47 +11,72 @@
             <TextBlock Style="{StaticResource Sub}"
                        Text="One choice that sets every flag and setting underneath it." />
 
-            <ui:CardAction x:Name="TileQuality" Tag="BestQuality" Click="Preset_Click" Margin="0,0,0,8">
-                <ui:CardAction.Icon>
-                    <ui:SymbolIcon Symbol="Star24" />
-                </ui:CardAction.Icon>
-                <StackPanel>
-                    <TextBlock Text="Best Quality" FontWeight="SemiBold" FontSize="15" />
-                    <TextBlock Text="Everything on. Full lighting, shadows and textures."
-                               FontSize="12" Opacity="0.7" Margin="0,3,0,0" />
-                </StackPanel>
-            </ui:CardAction>
+            <StackPanel Orientation="Horizontal" Margin="0,16,0,16">
+                <ui:Button x:Name="TabBuiltIn" Content="Built-in" Tag="BuiltIn" Margin="0,0,8,0" Click="Tab_Click" />
+                <ui:Button x:Name="TabMine" Content="My Presets" Tag="Mine" Click="Tab_Click" />
+            </StackPanel>
 
-            <ui:CardAction x:Name="TileBalanced" Tag="Balanced" Click="Preset_Click" Margin="0,0,0,8">
-                <ui:CardAction.Icon>
-                    <ui:SymbolIcon Symbol="Scales24" />
-                </ui:CardAction.Icon>
-                <StackPanel>
-                    <TextBlock Text="Balanced" FontWeight="SemiBold" FontSize="15" />
-                    <TextBlock Text="Normal looking game, expensive effects stripped."
-                               FontSize="12" Opacity="0.7" Margin="0,3,0,0" />
-                </StackPanel>
-            </ui:CardAction>
-
-            <ui:CardAction x:Name="TilePerformance" Tag="BestPerformance" Click="Preset_Click" Margin="0,0,0,20">
-                <ui:CardAction.Icon>
-                    <ui:SymbolIcon Symbol="Rocket24" />
-                </ui:CardAction.Icon>
-                <StackPanel>
-                    <TextBlock Text="Best Performance" FontWeight="SemiBold" FontSize="15" />
-                    <TextBlock Text="Frames over looks. Effects off, FPS uncapped."
-                               FontSize="12" Opacity="0.7" Margin="0,3,0,0" />
-                </StackPanel>
-            </ui:CardAction>
-
-            <ui:CardControl IsHitTestVisible="False">
-                <ui:CardControl.Header>
+            <StackPanel x:Name="BuiltInPanel">
+                <ui:CardAction x:Name="TileQuality" Tag="BestQuality" Click="Preset_Click" Margin="0,0,0,8">
+                    <ui:CardAction.Icon>
+                        <ui:SymbolIcon Symbol="Star24" />
+                    </ui:CardAction.Icon>
                     <StackPanel>
-                        <TextBlock x:Name="CurrentText" Style="{StaticResource Body}" FontWeight="SemiBold" />
-                        <TextBlock x:Name="CurrentDesc" Style="{StaticResource Body}" MaxWidth="500"
-                                   Opacity="0.7" Margin="0,6,0,0" />
+                        <TextBlock Text="Best Quality" FontWeight="SemiBold" FontSize="15" />
+                        <TextBlock Text="Everything on. Full lighting, shadows and textures."
+                                   FontSize="12" Opacity="0.7" Margin="0,3,0,0" />
                     </StackPanel>
-                </ui:CardControl.Header>
-            </ui:CardControl>
+                </ui:CardAction>
+
+                <ui:CardAction x:Name="TileBalanced" Tag="Balanced" Click="Preset_Click" Margin="0,0,0,8">
+                    <ui:CardAction.Icon>
+                        <ui:SymbolIcon Symbol="Scales24" />
+                    </ui:CardAction.Icon>
+                    <StackPanel>
+                        <TextBlock Text="Balanced" FontWeight="SemiBold" FontSize="15" />
+                        <TextBlock Text="Normal looking game, expensive effects stripped."
+                                   FontSize="12" Opacity="0.7" Margin="0,3,0,0" />
+                    </StackPanel>
+                </ui:CardAction>
+
+                <ui:CardAction x:Name="TilePerformance" Tag="BestPerformance" Click="Preset_Click" Margin="0,0,0,20">
+                    <ui:CardAction.Icon>
+                        <ui:SymbolIcon Symbol="Rocket24" />
+                    </ui:CardAction.Icon>
+                    <StackPanel>
+                        <TextBlock Text="Best Performance" FontWeight="SemiBold" FontSize="15" />
+                        <TextBlock Text="Frames over looks. Effects off, FPS uncapped."
+                                   FontSize="12" Opacity="0.7" Margin="0,3,0,0" />
+                    </StackPanel>
+                </ui:CardAction>
+
+                <ui:CardControl IsHitTestVisible="False">
+                    <ui:CardControl.Header>
+                        <StackPanel>
+                            <TextBlock x:Name="CurrentText" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                            <TextBlock x:Name="CurrentDesc" Style="{StaticResource Body}" MaxWidth="500"
+                                       Opacity="0.7" Margin="0,6,0,0" />
+                        </StackPanel>
+                    </ui:CardControl.Header>
+                </ui:CardControl>
+            </StackPanel>
+
+            <StackPanel x:Name="MinePanel" Visibility="Collapsed">
+                <ui:CardAction Click="SaveCurrent_Click" Margin="0,0,0,16">
+                    <ui:CardAction.Icon>
+                        <ui:SymbolIcon Symbol="Save24" />
+                    </ui:CardAction.Icon>
+                    <StackPanel>
+                        <TextBlock Text="Save current settings as a preset" FontWeight="SemiBold" FontSize="15" />
+                        <TextBlock Text="Captures every enabled FastFlag, graphics setting and process priority you have right now."
+                                   FontSize="12" Opacity="0.7" Margin="0,3,0,0" />
+                    </StackPanel>
+                </ui:CardAction>
+
+                <TextBlock x:Name="MineEmptyText" Text="No saved presets yet - save your current setup above to create one."
+                           Style="{StaticResource Sub}" Margin="4,0,0,8" />
+
+                <StackPanel x:Name="SavedPresetsPanel" />
+            </StackPanel>
     </StackPanel>
 </Page>
