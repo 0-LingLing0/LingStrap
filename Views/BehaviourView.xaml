@@ -31,6 +31,17 @@
 
             <ui:CardControl Margin="0,0,0,8">
                 <ui:CardControl.Header>
+                    <StackPanel>
+                        <TextBlock Text="Reopen Lingstrap once Roblox closes" Style="{StaticResource Body}" FontWeight="SemiBold" />
+                        <TextBlock Style="{StaticResource Sub}" Margin="0,4,0,0" MaxWidth="450"
+                                   Text="Brings Lingstrap back once you're done playing, instead of leaving nothing running." />
+                    </StackPanel>
+                </ui:CardControl.Header>
+                <ui:ToggleSwitch x:Name="ChkReopenOnClose" Checked="Setting_Changed" Unchecked="Setting_Changed" />
+            </ui:CardControl>
+
+            <ui:CardControl Margin="0,0,0,8">
+                <ui:CardControl.Header>
                     <TextBlock Text="Close the Roblox crash handler" Style="{StaticResource Body}" FontWeight="SemiBold" />
                 </ui:CardControl.Header>
                 <ui:ToggleSwitch x:Name="ChkCrashHandler" Checked="Setting_Changed" Unchecked="Setting_Changed" />

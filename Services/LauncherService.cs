@@ -219,6 +219,7 @@ public static class LauncherService
             DiscordPresenceService.OnRobloxStarted();
             ActivityCoordinator.OnRobloxStarted();
             FpsOverlayCoordinator.OnRobloxStarted();
+            ReopenOnCloseService.OnRobloxStarted();
 
             dialog.SetProgress(100);
             dialog.CloseDialog(); // CloseDialog is a no-op if the user already cancelled/closed it

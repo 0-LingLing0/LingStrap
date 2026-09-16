@@ -149,6 +149,14 @@ public partial class App : Application
             return;
         }
 
+        if (LaunchArgs.Length > 0 && LaunchArgs[0].Equals("-reopenwatcher", StringComparison.OrdinalIgnoreCase))
+        {
+            _isWatcherMode = true;
+            ReopenOnCloseService.RunWatcherAndBlock();
+            Shutdown();
+            return;
+        }
+
         SettingsService.Load();
 
         // Fixed theme (dark by default, light if the user opted in on the Appearance page) with a
@@ -187,8 +195,22 @@ public partial class App : Application
 
     private async void HandleRobloxLaunch(string launchUri)
     {
+        // Started BEFORE the launch, not after - this is what wires up the join-detection log
+        // watcher (among other things). The normal in-app flow already has this running well before
+        // the user ever clicks Launch (MainWindow starts it on its own Loaded event at startup), so
+        // starting it here only once LaunchAsync finishes was too late for a browser launch straight
+        // into a specific game: the join can happen (and get written to Roblox's log) while the
+        // client is still loading, before LaunchAsync itself returns - starting the watcher after
+        // that point means it never sees a join line that's already scrolled past by the time it
+        // starts tailing, leaving Discord stuck on "In the launcher" forever.
+        if (!SettingsService.Current.CloseLingstrapOnLaunch)
+            Lingstrap.MainWindow.StartBackgroundServices();
+
         var dialog = LaunchProgressDialogFactory.Create();
         var ok = await LauncherService.LaunchAsync(launchUri, dialog);
+
+        try { ProtocolHandlerService.Register(); }
+        catch (Exception ex) { Log.Warn($"Could not register protocol handler: {ex.Message}"); }
 
         if (ok)
         {
@@ -198,14 +220,18 @@ public partial class App : Application
                 Shutdown();
                 return;
             }
+
+            // Already running in the background (started above) - the user launched from their own
+            // browser, not from Lingstrap, so popping the main window open here would be an
+            // unrequested interruption to something they didn't ask to see.
+            // ShutdownMode="OnExplicitShutdown" (see App.xaml) keeps this process alive with no
+            // window; ReopenOnCloseService can bring a window up later if that option is turned on.
+            return;
         }
-        // On failure the dialog has already shown the error and stays open on its own (or, if the
-        // loading screen is off, there was nothing to show) - either way, still bring up the main
-        // window so the user isn't left with nothing to act on.
 
-        try { ProtocolHandlerService.Register(); }
-        catch (Exception ex) { Log.Warn($"Could not register protocol handler: {ex.Message}"); }
-
+        // Failed - the dialog already showed the error and stays open on its own (or, if the loading
+        // screen is off, there was nothing to show) - bring up the main window so the user isn't left
+        // with nothing to act on.
         var window = new MainWindow();
         window.Show();
     }

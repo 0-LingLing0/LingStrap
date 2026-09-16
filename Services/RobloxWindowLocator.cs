@@ -115,11 +115,33 @@ public static class RobloxWindowLocator
     /// <summary>
     /// Same lookup as <see cref="RectFor"/> but without logging - meant to be polled many times a
     /// second (e.g. to keep the overlay banner following the Roblox window while it's dragged),
-    /// where logging every tick would flood the log file for no benefit.
+    /// where logging every tick would flood the log file for no benefit. In device-independent
+    /// units, for WPF windows (Window.Left/Top/Width/Height) - a raw Win32 window that positions
+    /// itself via SetWindowPos directly wants real physical pixels instead; see
+    /// GetClientRectPhysicalQuiet for that.
     /// </summary>
     public static Rect? GetClientRectQuiet(IntPtr hwnd) => GetClientRectQuiet(hwnd, out _);
 
     private static Rect? GetClientRectQuiet(IntPtr hwnd, out string? failureReason)
+    {
+        if (GetClientRectPhysicalQuiet(hwnd, out failureReason) is not { } physical) return null;
+
+        var dpi = Native.GetDpiForWindow(hwnd);
+        var scale = dpi > 0 ? dpi / 96.0 : 1.0;
+        return new Rect(physical.Left / scale, physical.Top / scale, physical.Width / scale, physical.Height / scale);
+    }
+
+    /// <summary>
+    /// Same lookup, but in real physical screen pixels with no DPI conversion applied - what a raw
+    /// Win32 window (created via CreateWindowEx, positioned via SetWindowPos) needs, since a
+    /// per-monitor-DPI-aware process (see app.manifest) already places such windows in physical
+    /// pixels directly. Feeding it the device-independent Rect from GetClientRectQuiet instead would
+    /// undershoot by whatever the display's scale factor is - e.g. exactly half the real movement
+    /// on a 200% display - since that Rect has already been divided down for WPF's sake.
+    /// </summary>
+    public static Rect? GetClientRectPhysicalQuiet(IntPtr hwnd) => GetClientRectPhysicalQuiet(hwnd, out _);
+
+    private static Rect? GetClientRectPhysicalQuiet(IntPtr hwnd, out string? failureReason)
     {
         failureReason = null;
 
@@ -142,14 +164,6 @@ public static class RobloxWindowLocator
             return null;
         }
 
-        // Convert physical pixels (what Win32 just gave us) to device-independent units (what WPF
-        // expects for Window.Left/Top/Width/Height) using this specific window's own DPI - handles
-        // the common case (a scaled single monitor) directly, and the per-monitor case correctly
-        // too, since GetDpiForWindow reports whichever monitor the window actually is on.
-        var dpi = Native.GetDpiForWindow(hwnd);
-        var scale = dpi > 0 ? dpi / 96.0 : 1.0;
-
-        return new Rect(topLeft.X / scale, topLeft.Y / scale,
-            (rect.Right - rect.Left) / scale, (rect.Bottom - rect.Top) / scale);
+        return new Rect(topLeft.X, topLeft.Y, rect.Right - rect.Left, rect.Bottom - rect.Top);
     }
 }

@@ -49,6 +49,8 @@ public sealed class DxFpsOverlayWindow : IDisposable
     private const uint SWP_NOACTIVATE = 0x0010;
     private const uint SWP_NOZORDER = 0x0004;
     private const uint GW_HWNDPREV = 3;
+    private const int SW_HIDE = 0;
+    private const int SW_SHOWNOACTIVATE = 4;
 
     private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
 
@@ -90,6 +92,9 @@ public sealed class DxFpsOverlayWindow : IDisposable
         [DllImport("user32.dll")]
         public static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
 
+        [DllImport("user32.dll")]
+        public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
         [DllImport("kernel32.dll")]
         public static extern IntPtr GetModuleHandle(string? lpModuleName);
     }
@@ -111,6 +116,8 @@ public sealed class DxFpsOverlayWindow : IDisposable
 
     private string _currentText = "-- FPS";
     private System.Windows.Threading.DispatcherTimer? _followTimer;
+    private bool _isHidden;
+    private System.Windows.Rect? _lastRobloxRect;
 
     public DxFpsOverlayWindow(IntPtr robloxHwnd)
     {
@@ -237,8 +244,14 @@ public sealed class DxFpsOverlayWindow : IDisposable
         _swapChain.Present(0, PresentFlags.None);
     }
 
-    /// <summary>Places this window directly above Roblox in the z-order (not Topmost, which would
-    /// float it above the whole desktop) - the same technique OverlayBannerWindow uses.</summary>
+    /// <summary>
+    /// Places this window directly above Roblox in the z-order (not Topmost, which would float it
+    /// above the whole desktop) - the same technique OverlayBannerWindow uses. This needs to be
+    /// re-asserted continuously (see StartFollowing below), not just once at creation - restoring
+    /// Roblox from being minimized, or it entering (borderless) fullscreen, both change the overall
+    /// window stacking order and would otherwise silently leave this window buried behind Roblox
+    /// again with no error or event to react to.
+    /// </summary>
     private void PlaceAboveRoblox()
     {
         if (_robloxHwnd == IntPtr.Zero) return;
@@ -260,9 +273,20 @@ public sealed class DxFpsOverlayWindow : IDisposable
         Native.SetWindowPos(_hwnd, IntPtr.Zero, (int)x, (int)y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
     }
 
-    /// <summary>Keeps the chip glued to the Roblox window's corner while both are visible, same as
+    /// <summary>
+    /// Keeps the chip glued to the Roblox window's corner while both are visible, same as
     /// OverlayBannerWindow's own follow timer - reuses the WPF Dispatcher already running on this
-    /// thread purely for its timer/thread-marshaling machinery, not for any rendering.</summary>
+    /// thread purely for its timer/thread-marshaling machinery, not for any rendering. Also hides
+    /// this window whenever Roblox itself isn't currently visible (minimized) rather than leaving it
+    /// floating alone at its last position, and re-asserts z-order (see PlaceAboveRoblox) whenever
+    /// Roblox's rect actually changes - covers restoring from minimized, moving the window, and
+    /// entering/leaving (borderless) fullscreen, all of which can bump Roblox back above this
+    /// window in the stacking order. Deliberately NOT done unconditionally on every tick - that was
+    /// tried first and made Roblox's own fullscreen-detection logic think a window kept appearing
+    /// above it over and over, 60 times a second, which made ROBLOX ITSELF visibly flicker in and
+    /// out of fullscreen on its own. Only re-asserting when the rect has genuinely changed keeps
+    /// this to real, occasional events instead of a continuous fight over z-order.
+    /// </summary>
     public void StartFollowing()
     {
         _followTimer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Normal)
@@ -271,8 +295,27 @@ public sealed class DxFpsOverlayWindow : IDisposable
         };
         _followTimer.Tick += (_, _) =>
         {
-            if (RobloxWindowLocator.GetClientRectQuiet(_robloxHwnd) is { } rect)
+            if (RobloxWindowLocator.GetClientRectPhysicalQuiet(_robloxHwnd) is { } rect)
+            {
+                if (_isHidden)
+                {
+                    Native.ShowWindow(_hwnd, SW_SHOWNOACTIVATE);
+                    PlaceAboveRoblox();
+                    _isHidden = false;
+                }
+                else if (_lastRobloxRect is not { } last || last != rect)
+                {
+                    PlaceAboveRoblox();
+                }
+
+                _lastRobloxRect = rect;
                 Reposition(rect);
+            }
+            else if (!_isHidden)
+            {
+                Native.ShowWindow(_hwnd, SW_HIDE);
+                _isHidden = true;
+            }
         };
         _followTimer.Start();
     }

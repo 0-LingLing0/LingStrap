@@ -24,6 +24,7 @@ public partial class BehaviourView : Page
         ChkCrashHandler.IsChecked   = s.CloseCrashHandler;
         ChkDedicatedGpu.IsChecked   = s.ForceDedicatedGpu;
         ChkCloseOnLaunch.IsChecked  = s.CloseLingstrapOnLaunch;
+        ChkReopenOnClose.IsChecked  = s.ReopenLingstrapOnRobloxClose;
         ChkLoadingScreen.IsChecked  = s.ShowLoadingScreen;
         ChkPinCores.IsChecked       = s.PinClientsToCores;
         ChkServerLocation.IsChecked = s.ShowServerLocation;
@@ -91,6 +92,7 @@ public partial class BehaviourView : Page
         s.CloseCrashHandler       = ChkCrashHandler.IsChecked == true;
         s.ForceDedicatedGpu       = ChkDedicatedGpu.IsChecked == true;
         s.CloseLingstrapOnLaunch  = ChkCloseOnLaunch.IsChecked == true;
+        s.ReopenLingstrapOnRobloxClose = ChkReopenOnClose.IsChecked == true;
         s.ShowLoadingScreen       = ChkLoadingScreen.IsChecked == true;
         s.PinClientsToCores       = ChkPinCores.IsChecked == true;
         s.ShowServerLocation      = ChkServerLocation.IsChecked == true;

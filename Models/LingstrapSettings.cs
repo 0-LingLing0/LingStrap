@@ -49,6 +49,9 @@ public class LingstrapSettings
     public bool PinClientsToCores { get; set; } = false;
     public string ProcessPriority { get; set; } = "Normal";   // Normal | AboveNormal | High - never RealTime
     public bool CloseLingstrapOnLaunch { get; set; } = true;
+    /// <summary>Companion to CloseLingstrapOnLaunch - brings a Lingstrap window back up once every
+    /// Roblox client has closed, instead of leaving nothing running once you're done playing.</summary>
+    public bool ReopenLingstrapOnRobloxClose { get; set; } = false;
     public bool ShowLoadingScreen { get; set; } = true;
     /// <summary>
     /// Which monitor Roblox's window gets moved onto after it opens, identified by its Win32 device

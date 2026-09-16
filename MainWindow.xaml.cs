@@ -140,7 +140,9 @@ public partial class MainWindow : FluentWindow
         await UpdateDialogHelper.ShowAsync(this, result);
     }
 
-    private static void StartBackgroundServices()
+    /// <summary>Also called directly (with no MainWindow at all) when Roblox is launched from the
+    /// browser and CloseLingstrapOnLaunch is off - see App.HandleRobloxLaunch.</summary>
+    internal static void StartBackgroundServices()
     {
         if (SettingsService.Current.ShowServerLocation)
             ActivityCoordinator.Start();

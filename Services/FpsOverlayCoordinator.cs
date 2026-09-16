@@ -111,7 +111,10 @@ public static class FpsOverlayCoordinator
         Native.GetWindowThreadProcessId(hwnd, out var pid);
 
         _overlay = new Views.DxFpsOverlayWindow(hwnd);
-        _overlay.Reposition(rect);
+        // Physical pixels, not the device-independent `rect` passed in (that one's fine for the log
+        // line it came from, but this raw Win32 window positions itself via SetWindowPos, which
+        // expects real screen pixels - feeding it DIU values undershoots on any scaled display.
+        _overlay.Reposition(RobloxWindowLocator.GetClientRectPhysicalQuiet(hwnd) ?? rect);
         _overlay.StartFollowing();
 
         _tracker = new RobloxFpsTracker((int)pid);

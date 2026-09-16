@@ -11,9 +11,10 @@ namespace Lingstrap.Services;
 ///
 /// Mitigation, not a guaranteed fix: Discord's own built-in Roblox detection overrides this once
 /// RobloxPlayerBeta.exe starts, and Lingstrap can't disable that detection - only out-compete it
-/// by re-applying its own payload every 15 seconds for as long as Roblox is running, plus
+/// by re-applying its own payload every few seconds for as long as Roblox is running, plus
 /// immediately on server join/leave. Discord may still occasionally flip back to its own
-/// detection in the window between re-applies.
+/// detection in the window between re-applies - a shorter interval narrows that window but can't
+/// close it completely, since Discord's own re-detection isn't on a schedule Lingstrap controls.
 ///
 /// When CloseLingstrapOnLaunch will exit this process shortly after Roblox starts, the re-apply
 /// loop instead runs in a detached watcher process (the same pattern as CompanionAppService and
@@ -25,7 +26,7 @@ namespace Lingstrap.Services;
 public static class DiscordPresenceService
 {
     private const string ClientId = "1548993478438944878";
-    private const int ReapplyIntervalMs = 15000;
+    private const int ReapplyIntervalMs = 3000;
     private const string WatcherArg = "-discordwatcher";
     private const string WatcherGuardMutexName = "Lingstrap_DiscordWatcherActive";
 
