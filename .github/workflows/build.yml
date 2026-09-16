@@ -6,6 +6,9 @@ on:
     tags: [ 'v*' ]
   workflow_dispatch:
 
+permissions:
+  contents: write   # needed for the Publish GitHub Release step to create a release + upload assets
+
 jobs:
   build:
     runs-on: windows-latest
