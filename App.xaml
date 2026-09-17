@@ -32,6 +32,26 @@
             <Color x:Key="ControlStrokeColorDefault">#1FFFFFFF</Color>
             <SolidColorBrush x:Key="ControlStrokeColorDefaultBrush" Color="{StaticResource ControlStrokeColorDefault}" />
 
+            <!--
+                WPF-UI's dark default for this one is #19000000 - BLACK at 10% - which is what both
+                the group outlines and every hairline between settings were being drawn in. Black on
+                a #16171F ground lands about two percent away from the background, so the lines were
+                effectively invisible; on a dark theme a separator has to be lighter than what it
+                sits on, not darker. Overridden here (Color *and* Brush, like the palette above) so a
+                runtime theme swap can't put WPF-UI's black one back.
+            -->
+            <Color x:Key="CardStrokeColorDefault">#2EFFFFFF</Color>
+            <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="{StaticResource CardStrokeColorDefault}" />
+
+            <!--
+                The hairlines between rows are deliberately a step softer than the outline around the
+                group. Drawn at the same weight, a group stops reading as one surface and turns into a
+                stack of equally-boxed bars - the outline has to stay the strongest line in the
+                picture for the rows inside it to read as belonging together.
+            -->
+            <Color x:Key="SettingRowDividerColor">#1FFFFFFF</Color>
+            <SolidColorBrush x:Key="SettingRowDividerBrush" Color="{StaticResource SettingRowDividerColor}" />
+
             <Color x:Key="TextFillColorPrimary">#FFF5F6FA</Color>
             <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="{StaticResource TextFillColorPrimary}" />
 
@@ -111,7 +131,7 @@
                     <Setter.Value>
                         <ControlTemplate TargetType="{x:Type v:SettingRow}">
                             <Border x:Name="Divider" BorderThickness="0,0,0,1" Padding="16,13,16,13"
-                                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                                    BorderBrush="{DynamicResource SettingRowDividerBrush}">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />
@@ -137,6 +157,97 @@
                                 </Trigger>
                                 <Trigger Property="ShowDivider" Value="False">
                                     <Setter TargetName="Divider" Property="BorderThickness" Value="0" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!--
+                Slider, retemplated for one reason: the stock track ran past where the thumb could
+                ever reach, so at Minimum and Maximum a stub of bare track stayed poking out beyond
+                it. Here the track Border spans the control's whole width while WPF's Track lays the
+                thumb's travel out inset by exactly half a thumb at each end - so at either extreme
+                the thumb's outer edge lands on the track's outer edge and covers the rounded cap
+                completely. That relationship is what makes the ends look finished, so the thumb's
+                20px and the track's 4px/2px radius have to move together if either changes.
+
+                Horizontal only, which is all this app uses; a vertical Slider would need its own.
+            -->
+            <Style x:Key="SliderRepeatBase" TargetType="RepeatButton">
+                <Setter Property="Focusable" Value="False" />
+                <Setter Property="IsTabStop" Value="False" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="RepeatButton">
+                            <!-- Transparent, not null: a null Background gets no hit-testing, which
+                                 would stop click-on-the-track from moving the thumb. -->
+                            <Border Background="Transparent" Height="20" />
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style x:Key="SliderFillRepeat" TargetType="RepeatButton" BasedOn="{StaticResource SliderRepeatBase}">
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="RepeatButton">
+                            <Border Background="Transparent" Height="20">
+                                <Border Height="4" CornerRadius="2" VerticalAlignment="Center"
+                                        Background="{DynamicResource AccentFillColorDefaultBrush}" />
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style x:Key="SliderThumbStyle" TargetType="Thumb">
+                <Setter Property="Focusable" Value="False" />
+                <Setter Property="Width" Value="20" />
+                <Setter Property="Height" Value="20" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Thumb">
+                            <Ellipse x:Name="Knob" Fill="{DynamicResource AccentFillColorDefaultBrush}" />
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Knob" Property="Opacity" Value="0.85" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style TargetType="{x:Type Slider}">
+                <Setter Property="MinHeight" Value="20" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="{x:Type Slider}">
+                            <Grid x:Name="Root" Height="20" Background="Transparent">
+                                <Border Height="4" CornerRadius="2" VerticalAlignment="Center"
+                                        Background="{DynamicResource CardStrokeColorDefaultBrush}" />
+
+                                <Track x:Name="PART_Track">
+                                    <Track.DecreaseRepeatButton>
+                                        <RepeatButton Command="Slider.DecreaseLarge"
+                                                      Style="{StaticResource SliderFillRepeat}" />
+                                    </Track.DecreaseRepeatButton>
+                                    <Track.Thumb>
+                                        <Thumb Style="{StaticResource SliderThumbStyle}" />
+                                    </Track.Thumb>
+                                    <Track.IncreaseRepeatButton>
+                                        <RepeatButton Command="Slider.IncreaseLarge"
+                                                      Style="{StaticResource SliderRepeatBase}" />
+                                    </Track.IncreaseRepeatButton>
+                                </Track>
+                            </Grid>
+
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter TargetName="Root" Property="Opacity" Value="0.4" />
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>

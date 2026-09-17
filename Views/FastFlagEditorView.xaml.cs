@@ -231,7 +231,9 @@ public partial class FastFlagEditorView : Page
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 6) };
         row.Children.Add(new TextBlock { Text = prefix, FontWeight = FontWeights.Bold, Foreground = new SolidColorBrush(color), Width = 20 });
-        row.Children.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, MaxWidth = 380, FontFamily = new FontFamily("Consolas") });
+        var message = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, MaxWidth = 380, FontFamily = new FontFamily("Consolas") };
+        message.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, "TextFillColorPrimaryBrush");
+        row.Children.Add(message);
         return row;
     }
 

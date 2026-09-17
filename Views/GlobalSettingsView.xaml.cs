@@ -124,13 +124,15 @@ public partial class GlobalSettingsView : Page
         foreach (var group in groups)
         {
             var header = new Border { Margin = new Thickness(0, 12, 0, 8) };
-            header.Child = new TextBlock
+            var headerText = new TextBlock
             {
                 Text = group.Key,
                 FontWeight = FontWeights.SemiBold,
                 FontSize = 15,
                 Opacity = 0.85,
             };
+            headerText.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, "TextFillColorPrimaryBrush");
+            header.Child = headerText;
             GroupsPanel.Children.Add(header);
 
             foreach (var field in group)

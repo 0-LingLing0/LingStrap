@@ -72,12 +72,14 @@ public partial class BehaviourView : Page
 
         foreach (var (pid, label) in CpuAffinityService.CurrentAssignments)
         {
-            CpuAssignmentsPanel.Children.Add(new TextBlock
+            var assignment = new TextBlock
             {
                 Text = $"PID {pid}: {label}",
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 2, 0, 0),
-            });
+            };
+            assignment.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
+            CpuAssignmentsPanel.Children.Add(assignment);
         }
     }
 
@@ -265,22 +267,31 @@ public partial class BehaviourView : Page
             var isSelected = monitor.DeviceName == selected;
 
             var content = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            content.Children.Add(new TextBlock
+            // Each tile is a plain Border, so there is no templated parent for these to inherit a
+            // foreground from, and WPF's default for an unstyled TextBlock is black - invisible on
+            // this theme. Same trap the cursor slots fell into once the CardExpander around them
+            // went away: any TextBlock built in code has to be told its colour explicitly.
+            var sizeText = new TextBlock
             {
                 Text = $"{monitor.Bounds.Width}x{monitor.Bounds.Height}",
                 FontSize = 11,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 TextAlignment = TextAlignment.Center,
-            });
+            };
+            sizeText.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, "TextFillColorPrimaryBrush");
+            content.Children.Add(sizeText);
+
             if (monitor.IsPrimary)
             {
-                content.Children.Add(new TextBlock
+                var primaryText = new TextBlock
                 {
                     Text = "Primary",
                     FontSize = 9,
                     Opacity = 0.7,
                     HorizontalAlignment = HorizontalAlignment.Center,
-                });
+                };
+                primaryText.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, "TextFillColorPrimaryBrush");
+                content.Children.Add(primaryText);
             }
 
             var tile = new Border
