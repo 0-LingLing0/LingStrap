@@ -2,8 +2,12 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+    <!-- Every TextBlock here sets its own Foreground. They used to sit inside a CardExpander and
+         inherit one from its template; on a plain panel there's nothing to inherit from and WPF's
+         default for an unstyled TextBlock is black, which is invisible on the dark theme. -->
     <StackPanel Width="130">
         <TextBlock x:Name="TitleText" FontWeight="SemiBold" FontSize="13"
+                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                    HorizontalAlignment="Center" Margin="0,0,0,8" />
 
         <Grid Width="120" Height="120" AllowDrop="True"
@@ -24,15 +28,18 @@
                    RenderOptions.BitmapScalingMode="NearestNeighbor" Visibility="Collapsed" />
 
             <TextBlock x:Name="HintText" Text="Drop an image here" TextWrapping="Wrap"
-                       TextAlignment="Center" Opacity="0.55" FontSize="11" Margin="10"
+                       TextAlignment="Center" FontSize="11" Margin="10"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                        VerticalAlignment="Center" HorizontalAlignment="Center" />
         </Grid>
 
-        <TextBlock x:Name="FileNameText" FontSize="11" Opacity="0.65" HorizontalAlignment="Center"
+        <TextBlock x:Name="FileNameText" FontSize="11" HorizontalAlignment="Center"
+                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                    Margin="0,6,0,0" TextTrimming="CharacterEllipsis" MaxWidth="120" Visibility="Collapsed" />
 
         <StackPanel x:Name="ScalePanel" Margin="0,10,0,0" Visibility="Collapsed">
-            <TextBlock Text="Size" FontSize="11" Opacity="0.65" HorizontalAlignment="Center" />
+            <TextBlock Text="Size" FontSize="11" HorizontalAlignment="Center"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
             <!-- WPF-UI's own Slider template has the track flush with the control's bounds (zero
                  inset) and a 20x20 thumb - by the standard WPF Track layout, that means the thumb's
                  outer edge (not just its center) already reaches the true left/right bounds exactly
@@ -43,7 +50,8 @@
                     IsSnapToTickEnabled="True" TickFrequency="1" Margin="0,2,0,0"
                     HorizontalAlignment="Stretch"
                     ValueChanged="ScaleSlider_ValueChanged" />
-            <TextBlock x:Name="ScaleSizeText" FontSize="11" Opacity="0.65" HorizontalAlignment="Center" Margin="0,2,0,0" />
+            <TextBlock x:Name="ScaleSizeText" FontSize="11" HorizontalAlignment="Center" Margin="0,2,0,0"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
         </StackPanel>
 
         <ui:Button x:Name="ClearButton" Content="Clear" HorizontalAlignment="Center" Margin="0,8,0,0"
