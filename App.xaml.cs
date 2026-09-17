@@ -189,7 +189,45 @@ public partial class App : Application
         try { ProtocolHandlerService.Register(); }
         catch (Exception ex) { Log.Warn($"Could not register protocol handler: {ex.Message}"); }
 
+        RemoveStaleExeFromUpdate();
         StartMainWindowAsync();
+    }
+
+    /// <summary>
+    /// Deletes the previous Lingstrap.exe that an update renamed aside. The installer can't overwrite
+    /// an exe that's still running - and it often is, since the detached watchers run from this same
+    /// file and the FPS overlay's one is elevated beyond an unelevated installer's reach - so it
+    /// renames the old file out of the way instead and leaves it for whichever start comes next. By
+    /// now nothing is using it; if something somehow still is, the delete fails and the following
+    /// start tries again.
+    /// </summary>
+    private static void RemoveStaleExeFromUpdate()
+    {
+        try
+        {
+            var exePath = Environment.ProcessPath;
+            if (string.IsNullOrEmpty(exePath)) return;
+
+            var directory = System.IO.Path.GetDirectoryName(exePath);
+            if (directory is null) return;
+
+            foreach (var stale in System.IO.Directory.GetFiles(directory, "Lingstrap.exe*.old"))
+            {
+                try
+                {
+                    System.IO.File.Delete(stale);
+                    Log.Info($"Removed the previous version left behind by an update: {System.IO.Path.GetFileName(stale)}");
+                }
+                catch (Exception ex)
+                {
+                    Log.Info($"Previous version {System.IO.Path.GetFileName(stale)} is still in use - leaving it for the next start. ({ex.Message})");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"Could not check for a leftover exe from an update: {ex.Message}");
+        }
     }
 
     /// <summary>The result of an AutoInstall update check made here, before any window exists -

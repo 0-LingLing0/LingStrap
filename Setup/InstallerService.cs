@@ -131,7 +131,7 @@ public static class InstallerService
                 }
             }
 
-            File.Copy(tempPath, InstalledExePath, overwrite: true);
+            InstallOverExisting(tempPath);
         }
         catch (IOException ex)
         {
@@ -146,22 +146,71 @@ public static class InstallerService
         CreateShortcut(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "Lingstrap.lnk"));
     }
 
+    /// <summary>
+    /// The file at InstalledExePath, replaced with the freshly downloaded one. Windows refuses to
+    /// overwrite or delete an exe that some process still has running, but it does allow that file to
+    /// be renamed: the running process carries on from the renamed file while the new build lands at
+    /// the real path, and the leftover is cleaned up on Lingstrap's next start.
+    ///
+    /// That fallback is what makes updating reliable at all, because closing everything first can't
+    /// be guaranteed. Lingstrap runs several detached watcher processes from this same exe, and the
+    /// FPS overlay's is deliberately elevated (see FpsWatcherTaskService) - this installer isn't, so
+    /// it cannot kill that one no matter how politely it asks. Before this, an update attempted while
+    /// Roblox was running with the FPS overlay on simply failed with "is Lingstrap still open?".
+    /// </summary>
+    private static void InstallOverExisting(string newExePath)
+    {
+        try
+        {
+            File.Copy(newExePath, InstalledExePath, overwrite: true);
+            return;
+        }
+        catch (IOException) when (File.Exists(InstalledExePath))
+        {
+            // Locked - fall through to the rename.
+        }
+
+        var stale = InstalledExePath + StaleSuffix;
+        try { File.Delete(stale); } catch { /* a previous leftover may still be running; the move below picks another name */ }
+
+        if (File.Exists(stale))
+            stale = $"{InstalledExePath}.{DateTime.UtcNow:yyyyMMddHHmmss}{StaleSuffix}";
+
+        File.Move(InstalledExePath, stale);
+        File.Copy(newExePath, InstalledExePath, overwrite: true);
+    }
+
+    /// <summary>Marks a replaced-but-still-running exe for deletion on a later start. Shared with
+    /// Lingstrap itself, which does that cleanup - keep the two in step if this ever changes.</summary>
+    public const string StaleSuffix = ".old";
+
     /// <summary>Asks any already-running Lingstrap to close normally (so it still saves its settings
-    /// via its own OnClosed handler) before falling back to a hard kill if it doesn't respond.</summary>
+    /// via its own OnClosed handler) before falling back to a hard kill if it doesn't respond. Best
+    /// effort only - an elevated watcher can't be killed from here at all, which is exactly why
+    /// InstallOverExisting doesn't depend on this having worked.</summary>
     private static void CloseRunningLingstrap()
     {
         foreach (var proc in Process.GetProcessesByName("Lingstrap"))
         {
-            try
+            using (proc)
             {
-                if (proc.CloseMainWindow())
-                    proc.WaitForExit(5000);
-                if (!proc.HasExited)
-                    proc.Kill();
-            }
-            catch
-            {
-                // Best effort - a leftover process just means the overwrite below may fail instead.
+                try
+                {
+                    if (proc.CloseMainWindow())
+                        proc.WaitForExit(5000);
+
+                    if (!proc.HasExited)
+                    {
+                        proc.Kill();
+                        // Kill only requests termination - the file stays locked until the process
+                        // actually goes away, which can be after the copy would have started.
+                        proc.WaitForExit(5000);
+                    }
+                }
+                catch
+                {
+                    // Best effort - InstallOverExisting handles whatever is still holding the file.
+                }
             }
         }
     }
