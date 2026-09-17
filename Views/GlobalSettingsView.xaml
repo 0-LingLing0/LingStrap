@@ -3,42 +3,51 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
       Title="Roblox Settings">
-    <StackPanel Margin="28,24,28,24">
-            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                <ui:SymbolIcon Symbol="Wrench24" Style="{StaticResource HeaderIcon}" />
-                <TextBlock Text="Roblox Settings" Style="{StaticResource H1}" Margin="0" VerticalAlignment="Center" />
-            </StackPanel>
-            <TextBlock Style="{StaticResource Sub}" MaxWidth="700"
-                       Text="Every setting Roblox keeps in GlobalBasicSettings_13.xml, read straight from the file." />
-
-            <ui:CardControl x:Name="RunningBanner" Margin="0,0,0,16" Visibility="Collapsed" IsHitTestVisible="False">
-                <ui:CardControl.Header>
-                    <StackPanel Orientation="Horizontal">
-                        <ui:SymbolIcon Symbol="Warning24" Foreground="{DynamicResource SystemFillColorCautionBrush}" />
-                        <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" MaxWidth="500" TextWrapping="Wrap"
-                                   Text="Roblox is running - changes will be applied the next time you launch." />
+    <StackPanel Margin="28,24,28,28" MaxWidth="900" HorizontalAlignment="Left">
+            <Grid Margin="0,0,0,20">
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <ui:SymbolIcon Symbol="Wrench24" Style="{StaticResource HeaderIcon}" />
+                        <TextBlock Text="Roblox Settings" Style="{StaticResource H1}" Margin="0" VerticalAlignment="Center" />
                     </StackPanel>
-                </ui:CardControl.Header>
-            </ui:CardControl>
+                    <TextBlock Style="{StaticResource Sub}" MaxWidth="520"
+                               Text="Every setting Roblox keeps in GlobalBasicSettings_13.xml, read straight from the file." />
+                </StackPanel>
+                <ui:Button x:Name="RestoreOriginalButton" Content="Restore original" Click="RestoreOriginal_Click"
+                           HorizontalAlignment="Right" VerticalAlignment="Center" />
+            </Grid>
 
-            <ui:CardControl x:Name="ErrorCard" Margin="0,0,0,16" Visibility="Collapsed" IsHitTestVisible="False">
-                <ui:CardControl.Header>
-                    <StackPanel>
-                        <TextBlock Text="Can't read GlobalBasicSettings_13.xml" FontWeight="SemiBold" />
-                        <TextBlock x:Name="ErrorText" Style="{StaticResource Sub}" Margin="0,4,0,0" MaxWidth="500" />
-                    </StackPanel>
-                </ui:CardControl.Header>
-            </ui:CardControl>
+            <!-- Inline notice strips rather than cards: these are transient status, not settings, and a
+                 full card each gave them more weight than the settings they sit above. -->
+            <Border x:Name="RunningBanner" Visibility="Collapsed" CornerRadius="6" Padding="12,9" Margin="0,0,0,16"
+                    BorderThickness="1" BorderBrush="{DynamicResource SystemFillColorCautionBrush}">
+                <StackPanel Orientation="Horizontal">
+                    <ui:SymbolIcon Symbol="Warning24" FontSize="16" Foreground="{DynamicResource SystemFillColorCautionBrush}"
+                                   VerticalAlignment="Center" />
+                    <TextBlock Margin="9,0,0,0" VerticalAlignment="Center" FontSize="12" TextWrapping="Wrap" MaxWidth="600"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                               Text="Roblox is running - changes will be applied the next time you launch." />
+                </StackPanel>
+            </Border>
+
+            <Border x:Name="ErrorCard" Visibility="Collapsed" CornerRadius="6" Padding="12,9" Margin="0,0,0,16"
+                    BorderThickness="1" BorderBrush="{DynamicResource SystemFillColorCriticalBrush}">
+                <StackPanel>
+                    <TextBlock Text="Can't read GlobalBasicSettings_13.xml" FontWeight="SemiBold" FontSize="13"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                    <TextBlock x:Name="ErrorText" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0" MaxWidth="600"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+            </Border>
 
             <StackPanel x:Name="ContentPanel">
-                <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                    <ui:TextBox x:Name="SearchBox" Width="280" PlaceholderText="Search settings by name"
-                                TextChanged="SearchBox_TextChanged" />
-                    <ui:Button x:Name="RestoreOriginalButton" Content="Restore original" Margin="12,0,0,0" Click="RestoreOriginal_Click" />
-                </StackPanel>
+                <ui:TextBox x:Name="SearchBox" Width="300" HorizontalAlignment="Left" Margin="0,0,0,20"
+                            PlaceholderText="Search settings by name" TextChanged="SearchBox_TextChanged" />
 
-                <TextBlock Text="Common settings" Style="{StaticResource Body}" FontWeight="SemiBold" Margin="0,0,0,10" />
-                <StackPanel x:Name="ShortlistPanel" Margin="0,0,0,20" />
+                <TextBlock Text="COMMON SETTINGS" Style="{StaticResource SectionCaption}" />
+                <Border Style="{StaticResource SettingsGroup}">
+                    <StackPanel x:Name="ShortlistPanel" />
+                </Border>
 
                 <ui:CardExpander Header="Annoyances" IsExpanded="False" Margin="0,0,0,20">
                     <ui:CardExpander.Icon>

@@ -13,7 +13,11 @@ public partial class AboutView : Page
         InitializeComponent();
 
         var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.1.0";
-        InfoText.Text = $"Version {version}\nData folder: {Paths.Root}";
+        VersionRow.Description = Paths.Root;
+
+        var text = new TextBlock { Text = "v" + version, FontSize = 13 };
+        text.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
+        VersionRow.Content = text;
     }
 
     private void OpenLogs_Click(object sender, RoutedEventArgs e)
