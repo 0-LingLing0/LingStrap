@@ -13,6 +13,7 @@ public static class Paths
     public static string Logs     => Path.Combine(Root, "Logs");
     public static string Mods     => Path.Combine(Root, "Mods");       // textures, fonts, sounds (not cursors)
     public static string Cursors  => Path.Combine(Root, "Cursors");    // processed cursor slot images
+    public static string Fonts    => Path.Combine(Root, "Fonts");      // the chosen custom UI font
     public static string Presets  => Path.Combine(Root, "Presets");    // user-made preset files
     public static string Versions => Path.Combine(Root, "Versions");   // Roblox installs
 

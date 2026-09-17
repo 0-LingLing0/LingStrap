@@ -52,6 +52,16 @@ public static class ModsService
         ApplyCursorSlot(CursorSlot.Mouse, contentRoot, applied);
         ApplyCursorSlot(CursorSlot.Shiftlock, contentRoot, applied);
 
+        // Generated rather than copied from a source file: the font itself is copied, but each font
+        // family is Roblox's own JSON with its faces repointed, so it has to be built from what's
+        // installed. Written through the same backup path as everything else so Restore puts the
+        // original families back untouched.
+        foreach (var file in FontService.BuildFiles(versionFolder))
+        {
+            var dest = Path.Combine(contentRoot, file.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+            WriteWithBackup(file.Contents, dest, applied);
+        }
+
         SaveManifest(versionFolder, applied);
         SaveFingerprint(versionFolder, fingerprint);
         Log.Info($"Mods applied: {applied.Count} file(s) overwritten in {versionFolder}");
@@ -95,6 +105,8 @@ public static class ModsService
                 sb.Append(slot).Append(':').Append(relative).Append(':').Append(info.LastWriteTimeUtc.Ticks).Append(':').Append(info.Length).Append(';');
             }
         }
+
+        sb.Append(FontService.Fingerprint());
 
         return sb.ToString();
     }
@@ -227,6 +239,27 @@ public static class ModsService
         catch (Exception ex)
         {
             Log.Warn($"Could not apply mod file {dest}: {ex.Message}");
+        }
+    }
+
+    /// <summary>CopyWithBackup for content Lingstrap generates rather than copies - same backup and
+    /// manifest handling, so it restores identically.</summary>
+    private static void WriteWithBackup(byte[] contents, string dest, List<string> applied)
+    {
+        try
+        {
+            var backup = dest + BackupSuffix;
+            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+
+            if (File.Exists(dest) && !File.Exists(backup))
+                File.Copy(dest, backup);
+
+            File.WriteAllBytes(dest, contents);
+            applied.Add(dest);
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"Could not write generated file {dest}: {ex.Message}");
         }
     }
 

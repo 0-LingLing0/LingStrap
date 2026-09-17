@@ -85,9 +85,19 @@ public class LingstrapSettings
     /// <summary>Cursor slot name (CursorSlot.ToString()) -> chosen size percentage (25-200, default 100).</summary>
     public Dictionary<string, int> CursorScalePercent { get; set; } = new();
 
+    /// <summary>Display name of the custom UI font, purely so the Mods page can say which one is in
+    /// use - the font file itself lives in Paths.Fonts and is what FontService actually reads.</summary>
+    public string? CustomFontName { get; set; }
+
     // --- FastFlags -----------------------------------------------------
     /// <summary>Flags set by hand. Preset flags are applied on top at launch time.</summary>
     public List<FastFlagEntry> CustomFlags { get; set; } = new();
+
+    /// <summary>Master switch for everything Lingstrap writes to ClientAppSettings.json - the flag
+    /// list, the preset's flags and the renderer choice alike. Off writes an empty file rather than
+    /// skipping the write, so the flags from the last launch are actually cleared instead of being
+    /// left in place. Lets you turn the whole lot off to test something without losing the list.</summary>
+    public bool ManageFastFlags { get; set; } = true;
 
     // --- Companion Apps --------------------------------------------------
     public List<CompanionApp> CompanionApps { get; set; } = new();

@@ -12,6 +12,11 @@ public static class FastFlagsBuilder
         var s = SettingsService.Current;
         var flags = new Dictionary<string, string>();
 
+        // Nothing at all when the master switch is off, renderer included. The caller still writes
+        // the (now empty) file, which is what actually clears whatever the last launch left behind -
+        // returning early without writing would leave those flags applied.
+        if (!s.ManageFastFlags) return flags;
+
         foreach (var entry in s.CustomFlags)
         {
             if (!entry.Enabled || string.IsNullOrWhiteSpace(entry.Name)) continue;

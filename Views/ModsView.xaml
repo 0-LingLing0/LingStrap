@@ -25,6 +25,17 @@
             </StackPanel>
         </Border>
 
+        <TextBlock Text="FONT" Style="{StaticResource SectionCaption}" />
+        <Border Style="{StaticResource SettingsGroup}">
+            <v:SettingRow x:Name="FontRow" Title="Interface font" ShowDivider="False"
+                          Description="Roblox default">
+                <StackPanel Orientation="Horizontal">
+                    <ui:Button Content="Choose font" Click="ChooseFont_Click" />
+                    <ui:Button x:Name="ClearFontButton" Content="Reset" Margin="8,0,0,0" Click="ClearFont_Click" />
+                </StackPanel>
+            </v:SettingRow>
+        </Border>
+
         <!-- Cursors are shown open rather than behind an expander: they're the reason most people come
              to this page, and the slots are drop targets - worth seeing without a click first. -->
         <TextBlock Text="CURSORS" Style="{StaticResource SectionCaption}" />

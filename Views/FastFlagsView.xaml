@@ -22,6 +22,13 @@
                        VerticalAlignment="Center" />
         </Grid>
 
+        <Border Style="{StaticResource SettingsGroup}">
+            <v:SettingRow Title="Let Lingstrap manage FastFlags" ShowDivider="False"
+                          Description="Off applies none of this to Roblox - not the controls below, not the active preset's flags, not the renderer - without clearing anything you've set up here.">
+                <ui:ToggleSwitch x:Name="ChkManageFlags" Checked="ManageFlags_Changed" Unchecked="ManageFlags_Changed" />
+            </v:SettingRow>
+        </Border>
+
         <TextBlock Text="RENDER QUALITY" Style="{StaticResource SectionCaption}" />
         <Border Style="{StaticResource SettingsGroup}">
             <StackPanel>

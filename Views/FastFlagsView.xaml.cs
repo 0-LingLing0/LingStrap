@@ -21,6 +21,7 @@ public partial class FastFlagsView : Page
     {
         InitializeComponent();
 
+        ChkManageFlags.IsChecked = SettingsService.Current.ManageFastFlags;
         LoadRenderQuality();
         LoadTextureQuality();
         LoadAntiAliasing();
@@ -35,6 +36,16 @@ public partial class FastFlagsView : Page
         LoadBoolRow(FastFlagCatalog.AltEnterFullscreen, AltEnterToggle);
 
         _loading = false;
+    }
+
+    /// <summary>Not routed through PresetService.MarkCustom: turning everything off for a moment
+    /// isn't a change to the preset's contents, and coming back should still show the preset you
+    /// were on rather than having silently become Custom.</summary>
+    private void ManageFlags_Changed(object sender, System.Windows.RoutedEventArgs e)
+    {
+        if (_loading) return;
+        SettingsService.Current.ManageFastFlags = ChkManageFlags.IsChecked == true;
+        SettingsService.Save();
     }
 
     // ---- pure bool rows (Freeze voxel lighting, Gray sky, Disable DPI scaling, Alt+Enter fullscreen) ----
