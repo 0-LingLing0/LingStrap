@@ -353,15 +353,18 @@ public partial class AppearanceView : Page
         var hexRow = new Grid { Margin = new Thickness(0, 0, 0, 14) };
         hexRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         hexRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        // Every TextBlock built in code here sets its own Foreground: an unstyled one defaults to
+        // black, which is invisible against the dark theme. Only controls with a WPF-UI style of
+        // their own (the hex TextBox below) pick up a themed foreground without being told.
         var hash = new System.Windows.Controls.TextBlock
         {
             Text = "#",
             FontFamily = new FontFamily("Consolas"),
             FontSize = 15,
             VerticalAlignment = VerticalAlignment.Center,
-            Opacity = 0.55,
             Margin = new Thickness(0, 0, 7, 0),
         };
+        hash.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
         Grid.SetColumn(hash, 0);
         Grid.SetColumn(hexBox, 1);
         hexRow.Children.Add(hash);
@@ -385,9 +388,13 @@ public partial class AppearanceView : Page
             var stack = new StackPanel();
             var caption = new System.Windows.Controls.TextBlock
             {
-                Text = i switch { 0 => "R", 1 => "G", _ => "B" }, FontSize = 10, FontWeight = FontWeights.SemiBold, Opacity = 0.6,
+                Text = i switch { 0 => "R", 1 => "G", _ => "B" }, FontSize = 10, FontWeight = FontWeights.SemiBold,
             };
+            caption.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
+
             rgbValues[i] = new System.Windows.Controls.TextBlock { FontFamily = new FontFamily("Consolas"), FontSize = 13 };
+            rgbValues[i].SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, "TextFillColorPrimaryBrush");
+
             stack.Children.Add(caption);
             stack.Children.Add(rgbValues[i]);
             cell.Child = stack;
