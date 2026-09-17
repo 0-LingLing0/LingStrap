@@ -6,17 +6,23 @@
       Title="Companion Apps"
       AllowDrop="True" DragEnter="Page_DragEnter" Drop="Page_Drop">
     <StackPanel Margin="28,24,28,28" MaxWidth="900" HorizontalAlignment="Left">
+        <!-- Two real columns, not one cell with the button aligned right: sharing a cell lets the
+             wrapping subtitle run underneath the button instead of stopping short of it. -->
         <Grid Margin="0,0,0,22">
-            <StackPanel>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Margin="0,0,20,0">
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                     <ui:SymbolIcon Symbol="AppsListDetail24" Style="{StaticResource HeaderIcon}" />
                     <TextBlock Text="Companion Apps" Style="{StaticResource H1}" Margin="0" VerticalAlignment="Center" />
                 </StackPanel>
-                <TextBlock Style="{StaticResource Sub}" MaxWidth="560"
+                <TextBlock Style="{StaticResource Sub}"
                            Text="Programs you only want running alongside Roblox - started after it launches, closed when it does." />
             </StackPanel>
-            <ui:Button Content="Add app" Icon="{ui:SymbolIcon Add24}" Click="AddApp_Click"
-                       HorizontalAlignment="Right" VerticalAlignment="Center" />
+            <ui:Button Grid.Column="1" Content="Add app" Icon="{ui:SymbolIcon Add24}" Click="AddApp_Click"
+                       VerticalAlignment="Center" />
         </Grid>
 
         <Border Style="{StaticResource SettingsGroup}">

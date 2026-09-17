@@ -6,16 +6,20 @@
       Title="FastFlags">
     <StackPanel Margin="28,24,28,28" MaxWidth="900" HorizontalAlignment="Left">
         <Grid Margin="0,0,0,22">
-            <StackPanel>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Margin="0,0,20,0">
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                     <ui:SymbolIcon Symbol="Flag24" Style="{StaticResource HeaderIcon}" />
                     <TextBlock Text="FastFlags" Style="{StaticResource H1}" Margin="0" VerticalAlignment="Center" />
                 </StackPanel>
-                <TextBlock Style="{StaticResource Sub}" MaxWidth="540"
+                <TextBlock Style="{StaticResource Sub}"
                            Text="Named controls for the flags people actually touch. Each has its own on/off - off means the flag isn't written at all." />
             </StackPanel>
-            <ui:Button Content="Open editor" Icon="{ui:SymbolIcon Code24}" Click="OpenFastFlagEditor_Click"
-                       HorizontalAlignment="Right" VerticalAlignment="Center" />
+            <ui:Button Grid.Column="1" Content="Open editor" Icon="{ui:SymbolIcon Code24}" Click="OpenFastFlagEditor_Click"
+                       VerticalAlignment="Center" />
         </Grid>
 
         <TextBlock Text="RENDER QUALITY" Style="{StaticResource SectionCaption}" />

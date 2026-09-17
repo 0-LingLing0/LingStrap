@@ -8,7 +8,11 @@
         <!-- Header: the page title on the left, and the one action the page has on the right, so
              it's visible from anywhere on the page instead of buried between two sections. -->
         <Grid Margin="0,0,0,22">
-            <StackPanel>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Grid.Column="0" Margin="0,0,20,0">
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                     <ui:SymbolIcon Symbol="PaintBrush24" Style="{StaticResource HeaderIcon}" />
                     <TextBlock Text="Appearance" Style="{StaticResource H1}" Margin="0" VerticalAlignment="Center" />
@@ -16,7 +20,7 @@
                 <TextBlock Style="{StaticResource Sub}" Text="Pick an accent color and theme. The preview updates as you go." />
             </StackPanel>
 
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                 <TextBlock x:Name="DirtyHint" Style="{StaticResource Sub}" Margin="0,0,14,0"
                            VerticalAlignment="Center" Visibility="Collapsed"
                            Text="Lingstrap restarts to apply these" />
@@ -25,17 +29,16 @@
             </StackPanel>
         </Grid>
 
-        <Grid>
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" MinWidth="380" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-
+        <!-- A WrapPanel, not two Grid columns: side by side needs about 724px of content width, and
+             the window's own minimum leaves only ~564, which silently clipped the preview off the
+             right edge. Wrapping drops it below the controls instead once it stops fitting. Both
+             blocks therefore need a real width - neither can stretch to fill. -->
+        <WrapPanel>
             <!-- Left: everything you change -->
             <!-- No panel fills behind these: a lighter rectangle per section made each one read as a
                  separate block sitting on the page rather than part of it. The captions and the
                  spacing carry the grouping instead, so the whole page is one surface. -->
-            <StackPanel Grid.Column="0">
+            <StackPanel Width="440" Margin="0,0,22,26">
                 <TextBlock Text="ACCENT COLOR" Style="{StaticResource SectionCaption}" />
                 <Border x:Name="PickerHost" Margin="0,0,0,26" />
 
@@ -50,7 +53,7 @@
 
             <!-- Right: a small stand-in for the real window, so the accent and theme are shown
                  together on the surfaces they actually land on rather than one loose button. -->
-            <StackPanel Grid.Column="1" Width="262" Margin="22,0,0,0" VerticalAlignment="Top">
+            <StackPanel Width="262" VerticalAlignment="Top">
                 <TextBlock Text="PREVIEW" Style="{StaticResource SectionCaption}" />
                 <!-- This one keeps a frame on purpose: it stands in for a separate window, so it
                      should read as an object. The shadow is what makes it read as deliberately
@@ -112,6 +115,6 @@
                     </StackPanel>
                 </Border>
             </StackPanel>
-        </Grid>
+        </WrapPanel>
     </StackPanel>
 </Page>

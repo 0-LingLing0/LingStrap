@@ -5,16 +5,20 @@
       Title="Roblox Settings">
     <StackPanel Margin="28,24,28,28" MaxWidth="900" HorizontalAlignment="Left">
             <Grid Margin="0,0,0,20">
-                <StackPanel>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Margin="0,0,20,0">
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
                         <ui:SymbolIcon Symbol="Wrench24" Style="{StaticResource HeaderIcon}" />
                         <TextBlock Text="Roblox Settings" Style="{StaticResource H1}" Margin="0" VerticalAlignment="Center" />
                     </StackPanel>
-                    <TextBlock Style="{StaticResource Sub}" MaxWidth="520"
+                    <TextBlock Style="{StaticResource Sub}"
                                Text="Every setting Roblox keeps in GlobalBasicSettings_13.xml, read straight from the file." />
                 </StackPanel>
-                <ui:Button x:Name="RestoreOriginalButton" Content="Restore original" Click="RestoreOriginal_Click"
-                           HorizontalAlignment="Right" VerticalAlignment="Center" />
+                <ui:Button Grid.Column="1" x:Name="RestoreOriginalButton" Content="Restore original" Click="RestoreOriginal_Click"
+                           VerticalAlignment="Center" />
             </Grid>
 
             <!-- Inline notice strips rather than cards: these are transient status, not settings, and a
