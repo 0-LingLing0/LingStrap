@@ -12,7 +12,9 @@
             <TextBlock Text="FastFlag Editor" Style="{StaticResource H1}" Margin="0" VerticalAlignment="Center" />
         </StackPanel>
         <TextBlock Style="{StaticResource Sub}" MaxWidth="700"
-                   Text="Every flag, raw. Since September 2025 Roblox's own allow-list silently ignores any flag that isn't on it - the 18 known ones below are confirmed to still be allowlisted; anything else typed in still saves and might work too, but Lingstrap has no way to check Roblox's full list, so it's shown muted with a warning instead of a promise either way." />
+                   Text="Every flag, raw. Import and export use the same &quot;name&quot;: value format as Roblox's own ClientAppSettings.json, so a list from anywhere else works here and one exported here works anywhere else." />
+        <TextBlock Style="{StaticResource Sub}" MaxWidth="700" Margin="0,6,0,0"
+                   Text="Since September 2025 Roblox's own allow-list silently ignores any flag that isn't on it - the 18 known ones below are confirmed to still be allowlisted; anything else typed in still saves and might work too, but Lingstrap has no way to check Roblox's full list, so it's shown muted with a warning instead of a promise either way." />
 
         <ui:TextBox x:Name="SearchBox" PlaceholderText="Search by name" Margin="0,4,0,10"
                     TextChanged="SearchBox_TextChanged" />

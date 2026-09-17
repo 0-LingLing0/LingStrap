@@ -6,6 +6,7 @@ namespace Lingstrap.Services;
 /// <summary>
 /// Shared read/write access to SettingsService.Current.CustomFlags, used by both the friendly
 /// FastFlags page and the raw FastFlag Editor page so a change on one shows on the other.
+/// File import/export lives in FastFlagFile.
 /// </summary>
 public static class FastFlagStore
 {

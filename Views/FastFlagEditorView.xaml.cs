@@ -150,16 +150,21 @@ public partial class FastFlagEditorView : Page
 
     private async Task ImportFromFile(string path)
     {
-        FastFlagEntry[]? imported;
+        string json;
         try
         {
-            var json = File.ReadAllText(path);
-            imported = JsonSerializer.Deserialize<FastFlagEntry[]>(json);
-            if (imported == null) return;
+            json = File.ReadAllText(path);
         }
         catch (Exception ex)
         {
-            await DialogHelper.ShowErrorAsync(this, $"Could not import that file:\n{ex.Message}");
+            await DialogHelper.ShowErrorAsync(this, $"Could not read that file:\n{ex.Message}");
+            return;
+        }
+
+        var imported = FastFlagFile.TryParse(json, out var error);
+        if (imported == null)
+        {
+            await DialogHelper.ShowErrorAsync(this, $"Could not import that file:\n{error}");
             return;
         }
 
@@ -237,8 +242,7 @@ public partial class FastFlagEditorView : Page
 
         try
         {
-            var json = JsonSerializer.Serialize(_flags.ToArray(), new JsonSerializerOptions { WriteIndented = true });
-            File.WriteAllText(dialog.FileName, json);
+            File.WriteAllText(dialog.FileName, FastFlagFile.Export(_flags));
         }
         catch (Exception ex)
         {
