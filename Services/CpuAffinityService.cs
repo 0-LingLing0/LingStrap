@@ -19,6 +19,12 @@ public static class CpuAffinityService
     private static Timer? _timer;
     private static readonly object Lock = new();
 
+    /// <summary>What ClearAll last actually logged. Re-evaluation runs every 2 seconds for as long as
+    /// the feature is on, and with no client (or only one) it takes the same branch every time - so
+    /// logging unconditionally wrote an identical line to disk every 2 seconds forever, burying
+    /// everything else in the log file.</summary>
+    private static string? _lastClearLog;
+
     public static event Action? AssignmentsChanged;
 
     /// <summary>PID -> human-readable description of what it's pinned to. Read by the Activity page.</summary>
@@ -61,7 +67,7 @@ public static class CpuAffinityService
 
                 if (processes.Length <= 1)
                 {
-                    ClearAll(processes, "Only client running");
+                    ClearAll(processes, processes.Length == 1 ? "Only client running" : "No clients running");
                     AssignmentsChanged?.Invoke();
                     return;
                 }
@@ -74,6 +80,8 @@ public static class CpuAffinityService
                     AssignmentsChanged?.Invoke();
                     return;
                 }
+
+                _lastClearLog = null; // pinning now, so the next clear is a real change worth logging again
 
                 var ordered = OrderByCcdPreference(cores.OrderBy(c => LowestBit(c.Mask)).ToList());
                 var n = processes.Length;
@@ -171,8 +179,15 @@ public static class CpuAffinityService
             CurrentAssignments[p.Id] = "All cores";
         }
 
-        if (!string.IsNullOrEmpty(reason))
-            Log.Info($"CPU affinity: {reason} - all clients set to all cores.");
+        if (string.IsNullOrEmpty(reason)) return;
+
+        // Only when it actually changes - the clients this applies to included, so a different client
+        // taking over still gets a line, but the same state re-confirmed every 2 seconds doesn't.
+        var state = $"{reason}|{string.Join(',', CurrentAssignments.Keys)}";
+        if (state == _lastClearLog) return;
+
+        _lastClearLog = state;
+        Log.Info($"CPU affinity: {reason} - all clients set to all cores.");
     }
 
     private static DateTime SafeStartTime(Process p)

@@ -68,10 +68,19 @@ public static class CompanionAppService
         {
             var launched = new List<(int Pid, CompanionApp Config)>();
 
-            foreach (var entry in SettingsService.Current.CompanionApps.Where(c => c.Enabled))
+            // Each app's delay counts from when Roblox started, not from whenever the previous app
+            // happened to launch. Sleeping the full delay inline per app made them stack up - three
+            // apps set to 10 seconds meant the third started at 30 - even though the setting reads as
+            // "Startup delay", i.e. how long after Roblox this one waits. Going in delay order and
+            // sleeping only the remaining time gets every app to its own mark.
+            var startedAt = DateTime.UtcNow;
+
+            foreach (var entry in SettingsService.Current.CompanionApps
+                         .Where(c => c.Enabled)
+                         .OrderBy(c => c.StartupDelaySeconds))
             {
-                if (entry.StartupDelaySeconds > 0)
-                    Thread.Sleep(TimeSpan.FromSeconds(entry.StartupDelaySeconds));
+                var remaining = startedAt.AddSeconds(entry.StartupDelaySeconds) - DateTime.UtcNow;
+                if (remaining > TimeSpan.Zero) Thread.Sleep(remaining);
 
                 var pid = LaunchOne(entry);
                 if (pid is { } id) launched.Add((id, entry));

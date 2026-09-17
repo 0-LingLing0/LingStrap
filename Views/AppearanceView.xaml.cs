@@ -286,7 +286,7 @@ public partial class AppearanceView : Page
         var initial = _pendingCustomColor ?? PendingAccentColor;
 
         var picked = initial;
-        var content = BuildColorPickerContent(initial, c => picked = c);
+        var content = BuildColorPickerContent(initial, ColorThemeCatalog.CurrentAccentColor(), c => picked = c);
 
         var confirmed = await DialogHelper.ShowConfirmAsync(this, content, "Pick a custom color", confirmText: "Use this color");
         if (!confirmed) return;
@@ -300,102 +300,198 @@ public partial class AppearanceView : Page
     }
 
     private const int WheelSize = 200;
+    private const int BrightnessBarWidth = 26;
 
-    /// <summary>A click/drag hue+saturation wheel, one "darkness" (HSV value) slider, a hex box, and a
-    /// live preview swatch, all kept in sync. WPF-UI 4.3.0's own ColorPicker control is an internal,
-    /// unimplemented stub, so this is hand-built rather than reusing a library control.</summary>
-    private static FrameworkElement BuildColorPickerContent(Color initial, Action<Color> onChanged)
+    /// <summary>
+    /// A click/drag hue+saturation wheel with a brightness bar beside it, the color being replaced
+    /// shown next to the one being picked, a hex field, R/G/B readouts and the catalog colors as
+    /// starting points - laid out in two columns so the wheel doesn't squeeze everything else into a
+    /// strip beneath it. WPF-UI 4.3.0's own ColorPicker control is an internal, unimplemented stub,
+    /// so this is hand-built rather than reusing a library control.
+    /// </summary>
+    private static FrameworkElement BuildColorPickerContent(Color initial, Color current, Action<Color> onChanged)
     {
-        var panel = new StackPanel { Width = WheelSize + 40 };
+        var (initHue, initSat, initValue) = RgbToHsv(initial.R, initial.G, initial.B);
+        double hue = initHue, sat = initSat, value = initValue;
+        var updating = false;
 
-        var preview = new Border
+        // ---- left column: wheel + brightness bar ----
+        var wheelCanvas = new Canvas { Width = WheelSize, Height = WheelSize, Cursor = Cursors.Hand };
+        wheelCanvas.Children.Add(new System.Windows.Controls.Image
         {
-            Width = 56,
-            Height = 56,
-            CornerRadius = new CornerRadius(28),
-            Background = new SolidColorBrush(initial),
-            Margin = new Thickness(0, 0, 0, 12),
-            HorizontalAlignment = HorizontalAlignment.Center,
+            Width = WheelSize, Height = WheelSize, Source = BuildColorWheelBitmap(WheelSize),
+        });
+
+        // Filled with the picked color and ringed in white over a dark shadow, so it stays visible on
+        // a pale yellow just as well as on a deep blue - the old plain white ring vanished on light hues.
+        var indicator = new Ellipse
+        {
+            Width = 18,
+            Height = 18,
+            Stroke = Brushes.White,
+            StrokeThickness = 2,
+            IsHitTestVisible = false,
+            Effect = new DropShadowEffect { Color = Colors.Black, ShadowDepth = 0, BlurRadius = 5, Opacity = 0.85 },
         };
-        panel.Children.Add(preview);
+        wheelCanvas.Children.Add(indicator);
+
+        var barStops = new GradientStopCollection { new(initial, 0), new(Colors.Black, 1) };
+        var barBrush = new LinearGradientBrush(barStops) { StartPoint = new Point(0, 0), EndPoint = new Point(0, 1) };
+
+        var barCanvas = new Canvas
+        {
+            Width = BrightnessBarWidth, Height = WheelSize, Cursor = Cursors.Hand, Background = Brushes.Transparent,
+        };
+        barCanvas.Children.Add(new Border
+        {
+            Width = BrightnessBarWidth,
+            Height = WheelSize,
+            CornerRadius = new CornerRadius(BrightnessBarWidth / 2.0),
+            Background = barBrush,
+        });
+        var barHandle = new Border
+        {
+            Width = BrightnessBarWidth + 6,
+            Height = 10,
+            CornerRadius = new CornerRadius(4),
+            BorderBrush = Brushes.White,
+            BorderThickness = new Thickness(2),
+            IsHitTestVisible = false,
+            Effect = new DropShadowEffect { Color = Colors.Black, ShadowDepth = 0, BlurRadius = 5, Opacity = 0.85 },
+        };
+        Canvas.SetLeft(barHandle, -3);
+        barCanvas.Children.Add(barHandle);
+
+        var leftColumn = new StackPanel { Orientation = Orientation.Horizontal };
+        leftColumn.Children.Add(wheelCanvas);
+        leftColumn.Children.Add(new Border { Width = 12 }); // gap
+        leftColumn.Children.Add(barCanvas);
+
+        // ---- right column: what you're changing, and the numbers behind it ----
+        var newSwatch = new Border
+        {
+            Height = 54,
+            Background = new SolidColorBrush(initial),
+            CornerRadius = new CornerRadius(0, 8, 8, 0),
+        };
+        var compare = new Grid { Margin = new Thickness(0, 0, 0, 16) };
+        compare.ColumnDefinitions.Add(new ColumnDefinition());
+        compare.ColumnDefinitions.Add(new ColumnDefinition());
+        var oldSwatch = new Border
+        {
+            Height = 54,
+            Background = new SolidColorBrush(current),
+            CornerRadius = new CornerRadius(8, 0, 0, 8),
+        };
+        Grid.SetColumn(oldSwatch, 0);
+        Grid.SetColumn(newSwatch, 1);
+        compare.Children.Add(oldSwatch);
+        compare.Children.Add(newSwatch);
 
         var hexBox = new System.Windows.Controls.TextBox
         {
             Text = ColorThemeCatalog.ToHex(initial),
             MaxLength = 6,
-            HorizontalContentAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(30, 0, 30, 16),
+            BorderThickness = new Thickness(0),
+            Background = Brushes.Transparent,
+            FontFamily = new FontFamily("Consolas"),
+            VerticalContentAlignment = VerticalAlignment.Center,
+            MinWidth = 90,
         };
-        panel.Children.Add(hexBox);
-
-        var wheelCanvas = new Canvas
+        var hexRow = new Border
         {
-            Width = WheelSize,
-            Height = WheelSize,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 0, 0, 16),
-            Cursor = Cursors.Hand,
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(10, 2, 10, 2),
+            BorderThickness = new Thickness(1),
+            Margin = new Thickness(0, 0, 0, 14),
         };
-        wheelCanvas.Children.Add(new System.Windows.Controls.Image { Width = WheelSize, Height = WheelSize, Source = BuildColorWheelBitmap(WheelSize) });
-
-        var indicator = new Ellipse
+        hexRow.SetResourceReference(Border.BackgroundProperty, "ControlFillColorDefaultBrush");
+        hexRow.SetResourceReference(Border.BorderBrushProperty, "ControlStrokeColorDefaultBrush");
+        var hexInner = new StackPanel { Orientation = Orientation.Horizontal };
+        var hash = new System.Windows.Controls.TextBlock
         {
-            Width = 14,
-            Height = 14,
-            Stroke = Brushes.White,
-            StrokeThickness = 2,
-            IsHitTestVisible = false,
+            Text = "#", FontFamily = new FontFamily("Consolas"), VerticalAlignment = VerticalAlignment.Center, Opacity = 0.6,
         };
-        wheelCanvas.Children.Add(indicator);
-        panel.Children.Add(wheelCanvas);
+        hexInner.Children.Add(hash);
+        hexInner.Children.Add(hexBox);
+        hexRow.Child = hexInner;
 
-        var darknessRow = new StackPanel { Orientation = Orientation.Horizontal };
-        darknessRow.Children.Add(new System.Windows.Controls.TextBlock
+        var rgbGrid = new Grid { Margin = new Thickness(0, 0, 0, 14) };
+        for (var i = 0; i < 3; i++) rgbGrid.ColumnDefinitions.Add(new ColumnDefinition());
+        var rgbValues = new System.Windows.Controls.TextBlock[3];
+        for (var i = 0; i < 3; i++)
         {
-            Text = "Darkness", Width = 62, Foreground = Brushes.White, VerticalAlignment = VerticalAlignment.Center,
-        });
-        var darknessSlider = new Slider
-        {
-            Minimum = 0,
-            Maximum = 100,
-            Width = WheelSize - 62,
-            VerticalAlignment = VerticalAlignment.Center,
-            IsDirectionReversed = true, // slider reads left (bright) -> right (dark), matching the label
-        };
-        darknessRow.Children.Add(darknessSlider);
-        panel.Children.Add(darknessRow);
+            var cell = new Border
+            {
+                CornerRadius = new CornerRadius(6),
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(8, 5, 8, 5),
+                Margin = new Thickness(i == 0 ? 0 : 6, 0, 0, 0),
+            };
+            cell.SetResourceReference(Border.BackgroundProperty, "ControlFillColorDefaultBrush");
+            cell.SetResourceReference(Border.BorderBrushProperty, "ControlStrokeColorDefaultBrush");
 
-        var (initHue, initSat, initValue) = RgbToHsv(initial.R, initial.G, initial.B);
-        var hue = initHue;
-        var sat = initSat;
-        darknessSlider.Value = initValue * 100;
+            var stack = new StackPanel();
+            var caption = new System.Windows.Controls.TextBlock
+            {
+                Text = i switch { 0 => "R", 1 => "G", _ => "B" }, FontSize = 10, FontWeight = FontWeights.SemiBold, Opacity = 0.6,
+            };
+            rgbValues[i] = new System.Windows.Controls.TextBlock { FontFamily = new FontFamily("Consolas"), FontSize = 13 };
+            stack.Children.Add(caption);
+            stack.Children.Add(rgbValues[i]);
+            cell.Child = stack;
 
-        void UpdateIndicatorPosition()
+            Grid.SetColumn(cell, i);
+            rgbGrid.Children.Add(cell);
+        }
+
+        var presets = new WrapPanel();
+
+        var rightColumn = new StackPanel { MinWidth = 196, Margin = new Thickness(20, 0, 0, 0) };
+        rightColumn.Children.Add(SectionLabel("Current  /  New"));
+        rightColumn.Children.Add(compare);
+        rightColumn.Children.Add(SectionLabel("Hex"));
+        rightColumn.Children.Add(hexRow);
+        rightColumn.Children.Add(rgbGrid);
+        rightColumn.Children.Add(SectionLabel("Theme colors"));
+        rightColumn.Children.Add(presets);
+
+        var root = new Grid();
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        Grid.SetColumn(leftColumn, 0);
+        Grid.SetColumn(rightColumn, 1);
+        root.Children.Add(leftColumn);
+        root.Children.Add(rightColumn);
+
+        // ---- keeping every piece in sync ----
+        void Redraw(bool skipHexBox)
         {
+            var (r, g, b) = HsvToRgb(hue, sat, value);
+            var color = Color.FromRgb(r, g, b);
+
+            newSwatch.Background = new SolidColorBrush(color);
+            indicator.Fill = new SolidColorBrush(color);
+            rgbValues[0].Text = r.ToString();
+            rgbValues[1].Text = g.ToString();
+            rgbValues[2].Text = b.ToString();
+            if (!skipHexBox) hexBox.Text = ColorThemeCatalog.ToHex(color);
+
+            // The bar always runs from this hue/saturation at full brightness down to black, so it
+            // previews the range it's actually moving through rather than an abstract 0-100.
+            var (br, bg, bb) = HsvToRgb(hue, sat, 1.0);
+            barStops[0] = new GradientStop(Color.FromRgb(br, bg, bb), 0);
+
             var angleRad = hue * Math.PI / 180.0;
             var radius = sat * (WheelSize / 2.0);
-            var cx = WheelSize / 2.0 + radius * Math.Cos(angleRad);
-            var cy = WheelSize / 2.0 + radius * Math.Sin(angleRad);
-            Canvas.SetLeft(indicator, cx - indicator.Width / 2);
-            Canvas.SetTop(indicator, cy - indicator.Height / 2);
-        }
-        UpdateIndicatorPosition();
+            Canvas.SetLeft(indicator, WheelSize / 2.0 + radius * Math.Cos(angleRad) - indicator.Width / 2);
+            Canvas.SetTop(indicator, WheelSize / 2.0 + radius * Math.Sin(angleRad) - indicator.Height / 2);
+            Canvas.SetTop(barHandle, (1 - value) * WheelSize - barHandle.Height / 2);
 
-        var updating = false;
-
-        void ApplyFromWheelOrSlider()
-        {
-            if (updating) return;
-            updating = true;
-            var (r, g, b) = HsvToRgb(hue, sat, darknessSlider.Value / 100.0);
-            var color = Color.FromRgb(r, g, b);
-            preview.Background = new SolidColorBrush(color);
-            hexBox.Text = ColorThemeCatalog.ToHex(color);
-            updating = false;
             onChanged(color);
         }
 
-        void PickFromPoint(Point p)
+        void PickFromWheel(Point p)
         {
             var dx = p.X - WheelSize / 2.0;
             var dy = p.Y - WheelSize / 2.0;
@@ -404,22 +500,22 @@ public partial class AppearanceView : Page
             if (angle < 0) angle += 2 * Math.PI;
             hue = angle * 180.0 / Math.PI;
             sat = radius / (WheelSize / 2.0);
-            UpdateIndicatorPosition();
-            ApplyFromWheelOrSlider();
+            Redraw(false);
         }
 
-        wheelCanvas.MouseLeftButtonDown += (_, e) =>
-        {
-            wheelCanvas.CaptureMouse();
-            PickFromPoint(e.GetPosition(wheelCanvas));
-        };
-        wheelCanvas.MouseMove += (_, e) =>
-        {
-            if (e.LeftButton == MouseButtonState.Pressed) PickFromPoint(e.GetPosition(wheelCanvas));
-        };
+        wheelCanvas.MouseLeftButtonDown += (_, e) => { wheelCanvas.CaptureMouse(); PickFromWheel(e.GetPosition(wheelCanvas)); };
+        wheelCanvas.MouseMove += (_, e) => { if (e.LeftButton == MouseButtonState.Pressed) PickFromWheel(e.GetPosition(wheelCanvas)); };
         wheelCanvas.MouseLeftButtonUp += (_, _) => wheelCanvas.ReleaseMouseCapture();
 
-        darknessSlider.ValueChanged += (_, _) => ApplyFromWheelOrSlider();
+        void PickFromBar(Point p)
+        {
+            value = Math.Clamp(1 - p.Y / WheelSize, 0, 1);
+            Redraw(false);
+        }
+
+        barCanvas.MouseLeftButtonDown += (_, e) => { barCanvas.CaptureMouse(); PickFromBar(e.GetPosition(barCanvas)); };
+        barCanvas.MouseMove += (_, e) => { if (e.LeftButton == MouseButtonState.Pressed) PickFromBar(e.GetPosition(barCanvas)); };
+        barCanvas.MouseLeftButtonUp += (_, _) => barCanvas.ReleaseMouseCapture();
 
         hexBox.TextChanged += (_, _) =>
         {
@@ -430,19 +526,50 @@ public partial class AppearanceView : Page
                 return;
 
             var color = Color.FromRgb((byte)((parsed >> 16) & 0xFF), (byte)((parsed >> 8) & 0xFF), (byte)(parsed & 0xFF));
-            var (h, s, v) = RgbToHsv(color.R, color.G, color.B);
+            (hue, sat, value) = RgbToHsv(color.R, color.G, color.B);
 
             updating = true;
-            hue = h;
-            sat = s;
-            darknessSlider.Value = v * 100;
-            UpdateIndicatorPosition();
-            preview.Background = new SolidColorBrush(color);
+            Redraw(true); // leave the box alone while it's being typed into
             updating = false;
-            onChanged(color);
         };
 
-        return panel;
+        foreach (var theme in ColorThemeCatalog.All)
+        {
+            var swatch = new Border
+            {
+                Width = 26,
+                Height = 26,
+                Margin = new Thickness(0, 0, 7, 7),
+                CornerRadius = new CornerRadius(13),
+                Background = new SolidColorBrush(theme.Base),
+                Cursor = Cursors.Hand,
+                ToolTip = $"Start from {theme.Name}",
+            };
+            var baseColor = theme.Base;
+            swatch.MouseLeftButtonUp += (_, _) =>
+            {
+                (hue, sat, value) = RgbToHsv(baseColor.R, baseColor.G, baseColor.B);
+                Redraw(false);
+            };
+            presets.Children.Add(swatch);
+        }
+
+        Redraw(false);
+        return root;
+    }
+
+    private static System.Windows.Controls.TextBlock SectionLabel(string text)
+    {
+        var label = new System.Windows.Controls.TextBlock
+        {
+            Text = text.ToUpperInvariant(),
+            FontSize = 10,
+            FontWeight = FontWeights.SemiBold,
+            Opacity = 0.6,
+            Margin = new Thickness(0, 0, 0, 6),
+        };
+        label.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, "TextFillColorPrimaryBrush");
+        return label;
     }
 
     /// <summary>Hue = angle around the center, saturation = distance from center, value fixed at 1 -

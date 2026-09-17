@@ -6,6 +6,7 @@ using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Lingstrap.Services;
@@ -124,7 +125,7 @@ public static class RobloxInstallerService
     /// reporting real download progress through the dialog. Throws RobloxInstallException with a
     /// specific reason on failure - never fails silently or with a generic message.
     /// </summary>
-    public static async Task InstallAsync(string version, ILaunchProgressDialog dialog)
+    public static async Task InstallAsync(string version, ILaunchProgressDialog dialog, CancellationToken cancellationToken = default)
     {
         var versionFolder = Path.Combine(Paths.RobloxVersions, version);
         Directory.CreateDirectory(versionFolder);
@@ -147,7 +148,7 @@ public static class RobloxInstallerService
                 var tempPath = Path.Combine(tempDir, package.Name);
                 var packageStart = downloadedBytes;
 
-                await DownloadPackageAsync(version, package, tempPath, bytesRead =>
+                await DownloadPackageAsync(version, package, tempPath, cancellationToken, bytesRead =>
                 {
                     if (totalBytes <= 0) return;
 
@@ -162,6 +163,8 @@ public static class RobloxInstallerService
                     dialog.SetProgress(percent);
                 });
 
+                VerifyChecksum(package, tempPath);
+
                 downloadedBytes += package.CompressedSize;
                 downloadedFiles.Add((package, tempPath));
                 Log.Info($"Downloaded {package.Name} ({package.CompressedSize} bytes) for Roblox {version}");
@@ -172,6 +175,8 @@ public static class RobloxInstallerService
 
             foreach (var (package, tempPath) in downloadedFiles)
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 if (!PackageDirectoryMap.TryGetValue(package.Name, out var relativeDir))
                 {
                     relativeDir = "";
@@ -287,32 +292,66 @@ public static class RobloxInstallerService
         return packages;
     }
 
-    private static async Task DownloadPackageAsync(string version, RobloxPackage package, string destPath, Action<long> onProgress)
+    private static async Task DownloadPackageAsync(string version, RobloxPackage package, string destPath,
+        CancellationToken cancellationToken, Action<long> onProgress)
     {
         HttpResponseMessage response;
         try
         {
-            response = await Http.GetAsync($"https://setup.rbxcdn.com/{version}-{package.Name}", HttpCompletionOption.ResponseHeadersRead);
+            response = await Http.GetAsync($"https://setup.rbxcdn.com/{version}-{package.Name}",
+                HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         }
         catch (HttpRequestException ex)
         {
             throw new RobloxInstallException($"Could not reach Roblox's CDN to download {package.Name}: {ex.Message}");
         }
 
-        if (!response.IsSuccessStatusCode)
-            throw new RobloxInstallException($"Failed to download {package.Name}: HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
-
-        await using var httpStream = await response.Content.ReadAsStreamAsync();
-        await using var fileStream = File.Create(destPath);
-
-        var buffer = new byte[81920];
-        long totalRead = 0;
-        int read;
-        while ((read = await httpStream.ReadAsync(buffer)) > 0)
+        using (response)
         {
-            await fileStream.WriteAsync(buffer.AsMemory(0, read));
-            totalRead += read;
-            onProgress(totalRead);
+            if (!response.IsSuccessStatusCode)
+                throw new RobloxInstallException($"Failed to download {package.Name}: HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+
+            await using var httpStream = await response.Content.ReadAsStreamAsync(cancellationToken);
+            await using var fileStream = File.Create(destPath);
+
+            var buffer = new byte[81920];
+            long totalRead = 0;
+            int read;
+            while ((read = await httpStream.ReadAsync(buffer, cancellationToken)) > 0)
+            {
+                await fileStream.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
+                totalRead += read;
+                onProgress(totalRead);
+            }
         }
+    }
+
+    /// <summary>
+    /// Checks a downloaded package against the MD5 the manifest gave for it. Roblox publishes these
+    /// precisely so a truncated or garbled transfer can be caught before it's extracted - without
+    /// this, a dropped connection mid-package extracted silently into a broken install that
+    /// RobloxLocator still accepts as valid (it only checks that the exe exists), leaving Roblox to
+    /// crash on startup for no visible reason. Not a security check - just corruption detection,
+    /// which is all the manifest's MD5 is there for.
+    /// </summary>
+    private static void VerifyChecksum(RobloxPackage package, string path)
+    {
+        if (string.IsNullOrWhiteSpace(package.Md5)) return;
+
+        string actual;
+        try
+        {
+            using var stream = File.OpenRead(path);
+            actual = Convert.ToHexString(System.Security.Cryptography.MD5.HashData(stream));
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"Could not verify {package.Name}: {ex.Message}");
+            return;
+        }
+
+        if (!actual.Equals(package.Md5, StringComparison.OrdinalIgnoreCase))
+            throw new RobloxInstallException(
+                $"{package.Name} downloaded incorrectly (checksum mismatch) - the connection likely dropped partway. Try launching again.");
     }
 }

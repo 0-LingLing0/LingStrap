@@ -135,12 +135,54 @@ public static class CursorImageService
         return ProcessAll(slot, master, percent);
     }
 
-    /// <summary>The primary destination's current pixel size at this slot's stored percentage, without changing anything.</summary>
+    /// <summary>
+    /// The primary destination's current pixel size at this slot's stored percentage, genuinely
+    /// without changing anything. This used to call ProcessAll, which re-encoded and rewrote every
+    /// processed PNG just to learn a number it could compute - and since ModsService fingerprints
+    /// those files by modified-time, simply opening the Mods page gave every one of them a fresh
+    /// timestamp and made the next launch redo the whole restore-then-recopy it exists to skip.
+    /// </summary>
     public static (int Width, int Height) GetPrimaryTargetSize(CursorSlot slot)
     {
         if (!HasSlot(slot)) return default;
+
         using var master = Image.Load<Rgba32>(MasterPath(slot));
-        return ProcessAll(slot, master, GetScalePercent(slot));
+        using var trimmedSource = master.Clone(x => x.Crop(FindOpaqueBounds(master)));
+
+        var primary = Destinations(slot)[0];
+        var geometry = GetGeometry(RobloxLocator.FindVersionFolder(), primary)
+                       ?? new CursorGeometry(new Size(FallbackSize, FallbackSize), new Rectangle(0, 0, FallbackSize, FallbackSize));
+
+        return ComputeTargetSize(geometry, trimmedSource.Width, trimmedSource.Height, GetScalePercent(slot));
+    }
+
+    /// <summary>
+    /// How big this slot's trimmed source ends up on one destination's canvas: scaled so 100% matches
+    /// Roblox's own content-box size for that destination, then held back if that would overflow the
+    /// real canvas (some destinations, e.g. MouseLockedCursor, have zero headroom above 100%, so a
+    /// percentage that's fine for one can overflow another). Shared by the real write in ProcessAll
+    /// and the read-only query above, so the number shown always matches the number written.
+    /// </summary>
+    private static (int Width, int Height) ComputeTargetSize(CursorGeometry geometry, int sourceWidth, int sourceHeight, int percent)
+    {
+        var sourceLonger = Math.Max(sourceWidth, sourceHeight);
+        var boxLonger = Math.Max(geometry.ContentBounds.Width, geometry.ContentBounds.Height);
+        var baseScale = sourceLonger > 0 ? (double)boxLonger / sourceLonger : 1.0;
+        var scale = baseScale * (percent / 100.0);
+
+        var width = Math.Max(1, (int)Math.Round(sourceWidth * scale));
+        var height = Math.Max(1, (int)Math.Round(sourceHeight * scale));
+
+        var overflowScale = Math.Min(
+            (double)geometry.CanvasSize.Width / width,
+            (double)geometry.CanvasSize.Height / height);
+        if (overflowScale < 1.0)
+        {
+            width = Math.Max(1, (int)Math.Round(width * overflowScale));
+            height = Math.Max(1, (int)Math.Round(height * overflowScale));
+        }
+
+        return (width, height);
     }
 
     /// <summary>
@@ -187,31 +229,7 @@ public static class CursorImageService
             var geometry = GetGeometry(versionFolder, relative)
                            ?? new CursorGeometry(new Size(FallbackSize, FallbackSize), new Rectangle(0, 0, FallbackSize, FallbackSize));
 
-            // 100% = the source's longer edge matches the box's longer edge (Roblox's own native
-            // bbox size for this destination) - the user's percentage scales relative to that.
-            var sourceLonger = Math.Max(trimmedSource.Width, trimmedSource.Height);
-            var boxLonger = Math.Max(geometry.ContentBounds.Width, geometry.ContentBounds.Height);
-            var baseScale = sourceLonger > 0 ? (double)boxLonger / sourceLonger : 1.0;
-            var scale = baseScale * (percent / 100.0);
-
-            var targetWidth = Math.Max(1, (int)Math.Round(trimmedSource.Width * scale));
-            var targetHeight = Math.Max(1, (int)Math.Round(trimmedSource.Height * scale));
-
-            // Never let content exceed the actual canvas - some destinations (e.g. MouseLockedCursor,
-            // whose content box already fills its whole native canvas) have zero headroom above 100%,
-            // so a percentage that's fine for one destination can silently overflow another. Without
-            // this, the overflowing part gets clipped off during DrawImage, the displayed "WxH" no
-            // longer matches what's actually visible, and two cursors reporting the same size end up
-            // looking different - one still fits its canvas with margin, the other is cropped edge-to-edge.
-            var overflowScale = Math.Min(
-                (double)geometry.CanvasSize.Width / targetWidth,
-                (double)geometry.CanvasSize.Height / targetHeight);
-            if (overflowScale < 1.0)
-            {
-                targetWidth = Math.Max(1, (int)Math.Round(targetWidth * overflowScale));
-                targetHeight = Math.Max(1, (int)Math.Round(targetHeight * overflowScale));
-            }
-
+            var (targetWidth, targetHeight) = ComputeTargetSize(geometry, trimmedSource.Width, trimmedSource.Height, percent);
             using var resizedContent = trimmedSource.Clone(x => x.Resize(targetWidth, targetHeight));
 
             // Centered directly on the full canvas - simple and predictable: what you see in the

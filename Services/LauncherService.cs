@@ -34,9 +34,15 @@ public static class LauncherService
 
         var cancelled = false;
         Process? startedProcess = null;
+        // The install is the one stage long enough for Cancel to matter and the only one that can't
+        // just be checked between steps - a few hundred MB of packages runs for minutes inside a
+        // single call, so without a token to hand it, Cancel did nothing at all until the download
+        // finished on its own.
+        using var installCts = new CancellationTokenSource();
         void OnCancel()
         {
             cancelled = true;
+            installCts.Cancel();
             if (startedProcess != null) TryKillLaunchingProcess(startedProcess);
         }
         dialog.CancelRequested += OnCancel;
@@ -53,7 +59,7 @@ public static class LauncherService
             dialog.SetProgress(5);
             dialog.SetStatus("Checking for updates");
 
-            var (playerExe, oldVersionFolderToRemove) = await EnsureInstalledAsync(dialog);
+            var (playerExe, oldVersionFolderToRemove) = await EnsureInstalledAsync(dialog, installCts.Token);
             if (playerExe is null) return false; // EnsureInstalledAsync already reported why
 
             if (cancelled) return false;
@@ -249,7 +255,8 @@ public static class LauncherService
     /// update just replaced an older install, that older version's folder - removed only once the
     /// new one has actually launched successfully.
     /// </summary>
-    private static async Task<(string? PlayerExe, string? OldVersionFolder)> EnsureInstalledAsync(ILaunchProgressDialog dialog)
+    private static async Task<(string? PlayerExe, string? OldVersionFolder)> EnsureInstalledAsync(
+        ILaunchProgressDialog dialog, CancellationToken cancellationToken)
     {
         var latestVersion = await RobloxInstallerService.GetLatestVersionAsync();
         var existingExe = await Task.Run(RobloxLocator.FindPlayerExe);
@@ -276,7 +283,14 @@ public static class LauncherService
 
         try
         {
-            await RobloxInstallerService.InstallAsync(latestVersion, dialog);
+            await RobloxInstallerService.InstallAsync(latestVersion, dialog, cancellationToken);
+        }
+        catch (OperationCanceledException)
+        {
+            // The user pressed Cancel mid-download - not a failure, and nothing to report: the
+            // partial install has already been cleaned up by InstallAsync itself.
+            Log.Info("Roblox install cancelled.");
+            return (null, null);
         }
         catch (RobloxInstallException ex)
         {
