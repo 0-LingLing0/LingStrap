@@ -11,10 +11,7 @@
             <TextBlock Style="{StaticResource Sub}"
                        Text="One choice that sets every flag and setting underneath it." />
 
-            <StackPanel Orientation="Horizontal" Margin="0,16,0,16">
-                <ui:Button x:Name="TabBuiltIn" Content="Built-in" Tag="BuiltIn" Margin="0,0,8,0" Click="Tab_Click" />
-                <ui:Button x:Name="TabMine" Content="My Presets" Tag="Mine" Click="Tab_Click" />
-            </StackPanel>
+            <StackPanel x:Name="TabHost" Orientation="Horizontal" Margin="0,18,0,18" />
 
             <StackPanel x:Name="BuiltInPanel">
                 <ui:CardAction x:Name="TileQuality" Tag="BestQuality" Click="Preset_Click" Margin="0,0,0,8">

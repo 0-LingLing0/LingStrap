@@ -54,7 +54,7 @@ public partial class AppearanceView : Page
     private void BuildThemeChooser()
     {
         Action<int>? select = null;
-        var (root, setSelected) = BuildSegmented(new[] { "Dark", "Light" }, _pendingLightTheme ? 1 : 0, index =>
+        var (root, setSelected) = Segmented.Build(new[] { "Dark", "Light" }, _pendingLightTheme ? 1 : 0, index =>
         {
             _pendingLightTheme = index == 1;
             select?.Invoke(index);
@@ -80,7 +80,7 @@ public partial class AppearanceView : Page
 
         Action<int>? select = null;
         var labels = Array.ConvertAll(ScalePercents, p => p + "%");
-        var (root, setSelected) = BuildSegmented(labels, closest, index =>
+        var (root, setSelected) = Segmented.Build(labels, closest, index =>
         {
             select?.Invoke(index);
             if (_loading) return;
@@ -92,66 +92,6 @@ public partial class AppearanceView : Page
         });
         select = setSelected;
         ScaleHost.Child = root;
-    }
-
-    /// <summary>A row of chips acting as one control: the selected one carries the accent, the rest
-    /// are plain. Returns the panel plus the callback that moves the selection, so the click handler
-    /// can decide whether a click should actually take.</summary>
-    private static (FrameworkElement Root, Action<int> SetSelected) BuildSegmented(
-        string[] labels, int selectedIndex, Action<int> onSelect)
-    {
-        var row = new StackPanel { Orientation = Orientation.Horizontal };
-        var chips = new List<Border>();
-
-        for (var i = 0; i < labels.Length; i++)
-        {
-            var text = new System.Windows.Controls.TextBlock
-            {
-                Text = labels[i],
-                FontSize = 13,
-                FontWeight = FontWeights.SemiBold,
-                HorizontalAlignment = HorizontalAlignment.Center,
-            };
-            var chip = new Border
-            {
-                CornerRadius = new CornerRadius(7),
-                Padding = new Thickness(18, 8, 18, 8),
-                Margin = new Thickness(0, 0, 8, 0),
-                Cursor = Cursors.Hand,
-                BorderThickness = new Thickness(1),
-                Child = text,
-            };
-
-            var index = i;
-            chip.MouseLeftButtonUp += (_, _) => onSelect(index);
-            chips.Add(chip);
-            row.Children.Add(chip);
-        }
-
-        void SetSelected(int index)
-        {
-            for (var i = 0; i < chips.Count; i++)
-            {
-                var selected = i == index;
-                var label = (System.Windows.Controls.TextBlock)chips[i].Child;
-
-                if (selected)
-                {
-                    chips[i].SetResourceReference(Border.BackgroundProperty, "AccentFillColorDefaultBrush");
-                    chips[i].SetResourceReference(Border.BorderBrushProperty, "AccentFillColorDefaultBrush");
-                    label.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, "TextOnAccentFillColorPrimaryBrush");
-                }
-                else
-                {
-                    chips[i].SetResourceReference(Border.BackgroundProperty, "ControlFillColorDefaultBrush");
-                    chips[i].SetResourceReference(Border.BorderBrushProperty, "ControlStrokeColorDefaultBrush");
-                    label.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, "TextFillColorPrimaryBrush");
-                }
-            }
-        }
-
-        SetSelected(selectedIndex);
-        return (row, SetSelected);
     }
 
     // ---- preview -----------------------------------------------------------------------------

@@ -51,13 +51,12 @@
                 </Border>
             </Border>
 
-            <ui:CardControl Margin="0,0,0,10">
-                <ui:CardControl.Header>
-                    <TextBlock Style="{StaticResource Body}" FontWeight="SemiBold" Text="Status" />
-                </ui:CardControl.Header>
-                <ui:Button Content="Open Lingstrap folder" Click="OpenFolder_Click" VerticalAlignment="Center" />
-            </ui:CardControl>
-
-            <StackPanel x:Name="StatusRowsPanel" />
+            <!-- Loose icon+text lines under a card that only held a button read as leftovers below the
+                 real content. The same facts as labelled rows with their values on the right fill the
+                 page properly and match every other page's grouping. -->
+            <TextBlock Text="AT A GLANCE" Style="{StaticResource SectionCaption}" />
+            <Border Style="{StaticResource SettingsGroup}" MinWidth="480" HorizontalAlignment="Left">
+                <StackPanel x:Name="StatusRowsPanel" />
+            </Border>
     </StackPanel>
 </Page>

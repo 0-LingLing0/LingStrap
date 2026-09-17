@@ -51,29 +51,29 @@ public partial class HomeView : Page
         PresetDesc.Text = PresetInfo.Description(s.ActivePreset);
 
         StatusRowsPanel.Children.Clear();
-        StatusRowsPanel.Children.Add(StatusRow(SymbolRegular.Folder24, $"Settings folder: {Paths.Root}"));
-        StatusRowsPanel.Children.Add(StatusRow(SymbolRegular.Flag24, $"Custom FastFlags: {s.CustomFlags.Count}"));
-        StatusRowsPanel.Children.Add(StatusRow(SymbolRegular.Copy24, $"Multi-instance: {(s.MultiInstance ? "on" : "off")}"));
+        StatusRowsPanel.Children.Add(StatusRow("Active preset", PresetInfo.Name(s.ActivePreset)));
+        StatusRowsPanel.Children.Add(StatusRow("Custom FastFlags", s.CustomFlags.Count.ToString()));
+        StatusRowsPanel.Children.Add(StatusRow("Mods", s.ModsEnabled ? "On" : "Off"));
+        StatusRowsPanel.Children.Add(StatusRow("Multi-instance", s.MultiInstance ? "On" : "Off"));
+        StatusRowsPanel.Children.Add(StatusRow("Roblox version", s.InstalledRobloxVersion ?? "Not installed yet"));
+
+        var folders = StatusRow("Lingstrap folder", null);
+        folders.Description = Paths.Root;
+        folders.ShowDivider = false;
+        folders.Content = new Wpf.Ui.Controls.Button { Content = "Open" };
+        ((Wpf.Ui.Controls.Button)folders.Content).Click += OpenFolder_Click;
+        StatusRowsPanel.Children.Add(folders);
     }
 
-    private static UIElement StatusRow(SymbolRegular symbol, string text)
+    private static SettingRow StatusRow(string title, string? value)
     {
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
-        row.Children.Add(new SymbolIcon
+        var row = new SettingRow { Title = title };
+        if (value != null)
         {
-            Symbol = symbol,
-            FontSize = 15,
-            Opacity = 0.6,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 10, 0),
-        });
-        row.Children.Add(new System.Windows.Controls.TextBlock
-        {
-            Text = text,
-            Style = (Style)Application.Current.Resources["Sub"],
-            Margin = new Thickness(0),
-            VerticalAlignment = VerticalAlignment.Center,
-        });
+            var text = new System.Windows.Controls.TextBlock { Text = value, FontSize = 13 };
+            text.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
+            row.Content = text;
+        }
         return row;
     }
 

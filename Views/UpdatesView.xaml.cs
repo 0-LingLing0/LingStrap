@@ -14,6 +14,15 @@ public partial class UpdatesView : Page
         InitializeComponent();
 
         UpdateModeCombo.SelectedIndex = (int)SettingsService.Current.UpdateMode;
+
+        var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.1.0";
+        VersionRow.Content = new System.Windows.Controls.TextBlock
+        {
+            Text = "v" + version,
+            FontSize = 13,
+            Foreground = (System.Windows.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+        };
+
         _loading = false;
     }
 
@@ -27,11 +36,11 @@ public partial class UpdatesView : Page
     private async void CheckForUpdates_Click(object sender, RoutedEventArgs e)
     {
         CheckUpdateButton.IsEnabled = false;
-        UpdateStatusText.Text = "Checking...";
+        CheckRow.Description = "Checking...";
 
         var result = await UpdateCheckerService.CheckForUpdateAsync();
 
-        UpdateStatusText.Text = result.Status switch
+        CheckRow.Description = result.Status switch
         {
             UpdateCheckerService.UpdateStatus.UpToDate => $"You're up to date (v{result.LatestVersion}).",
             UpdateCheckerService.UpdateStatus.UpdateAvailable => $"Version {result.LatestVersion} is available.",

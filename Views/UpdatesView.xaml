@@ -2,37 +2,32 @@
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      xmlns:v="clr-namespace:Lingstrap.Views"
       Title="Updates">
-    <StackPanel Margin="28,24,28,24">
+    <StackPanel Margin="28,24,28,28" MaxWidth="900" HorizontalAlignment="Left">
         <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
             <ui:SymbolIcon Symbol="ArrowDownload24" Style="{StaticResource HeaderIcon}" />
             <TextBlock Text="Updates" Style="{StaticResource H1}" Margin="0" VerticalAlignment="Center" />
         </StackPanel>
-        <TextBlock Style="{StaticResource Sub}" Text="Check for and install new Lingstrap versions." />
+        <TextBlock Style="{StaticResource Sub}" Text="Check for and install new Lingstrap versions." Margin="0,0,0,22" />
 
-        <ui:CardControl Margin="0,0,0,8">
-            <ui:CardControl.Header>
-                <StackPanel>
-                    <TextBlock Text="Check for updates" Style="{StaticResource Body}" FontWeight="SemiBold" />
-                    <TextBlock x:Name="UpdateStatusText" Style="{StaticResource Sub}" Margin="0,4,0,0" MaxWidth="450" />
-                </StackPanel>
-            </ui:CardControl.Header>
-            <ui:Button x:Name="CheckUpdateButton" Content="Check now" Click="CheckForUpdates_Click" VerticalAlignment="Center" />
-        </ui:CardControl>
+        <Border Style="{StaticResource SettingsGroup}" MinWidth="520" HorizontalAlignment="Left">
+            <StackPanel>
+                <v:SettingRow x:Name="VersionRow" Title="Installed version" />
 
-        <ui:CardControl Margin="0,0,0,8">
-            <ui:CardControl.Header>
-                <StackPanel>
-                    <TextBlock Text="Update behavior" Style="{StaticResource Body}" FontWeight="SemiBold" />
-                    <TextBlock Style="{StaticResource Sub}" Margin="0,4,0,0" MaxWidth="450"
-                               Text="What Lingstrap does with a new release it finds each time it starts." />
-                </StackPanel>
-            </ui:CardControl.Header>
-            <ComboBox x:Name="UpdateModeCombo" Width="180" SelectionChanged="UpdateModeCombo_SelectionChanged">
-                <ComboBoxItem Content="Off - never check" />
-                <ComboBoxItem Content="Notify me" />
-                <ComboBoxItem Content="Install automatically" />
-            </ComboBox>
-        </ui:CardControl>
+                <v:SettingRow x:Name="CheckRow" Title="Check for updates">
+                    <ui:Button x:Name="CheckUpdateButton" Content="Check now" Click="CheckForUpdates_Click" />
+                </v:SettingRow>
+
+                <v:SettingRow Title="When a new version is found" ShowDivider="False"
+                              Description="What Lingstrap does with a new release each time it starts.">
+                    <ComboBox x:Name="UpdateModeCombo" Width="180" SelectionChanged="UpdateModeCombo_SelectionChanged">
+                        <ComboBoxItem Content="Off - never check" />
+                        <ComboBoxItem Content="Notify me" />
+                        <ComboBoxItem Content="Install automatically" />
+                    </ComboBox>
+                </v:SettingRow>
+            </StackPanel>
+        </Border>
     </StackPanel>
 </Page>

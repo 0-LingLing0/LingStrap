@@ -13,35 +13,24 @@ public partial class PresetsView : Page
     public PresetsView()
     {
         InitializeComponent();
-        SelectTab("BuiltIn");
+        BuildTabs();
         Refresh();
     }
 
-    private void Tab_Click(object sender, RoutedEventArgs e)
+    private void BuildTabs()
     {
-        if (sender is not Wpf.Ui.Controls.Button b || b.Tag is not string tag) return;
-        SelectTab(tag);
-    }
-
-    private void SelectTab(string tag)
-    {
-        var builtIn = tag == "BuiltIn";
-        BuiltInPanel.Visibility = builtIn ? Visibility.Visible : Visibility.Collapsed;
-        MinePanel.Visibility = builtIn ? Visibility.Collapsed : Visibility.Visible;
-        HighlightTab(TabBuiltIn, builtIn);
-        HighlightTab(TabMine, !builtIn);
-
-        if (!builtIn) RefreshSavedPresets();
-    }
-
-    private static void HighlightTab(Wpf.Ui.Controls.Button tab, bool active)
-    {
-        if (active)
+        Action<int>? select = null;
+        var (root, setSelected) = Segmented.Build(new[] { "Built-in", "My Presets" }, 0, index =>
         {
-            var c = ColorThemeCatalog.CurrentAccentColor();
-            tab.Background = new SolidColorBrush(Color.FromArgb(0x33, c.R, c.G, c.B));
-        }
-        else tab.ClearValue(Control.BackgroundProperty);
+            select?.Invoke(index);
+
+            var builtIn = index == 0;
+            BuiltInPanel.Visibility = builtIn ? Visibility.Visible : Visibility.Collapsed;
+            MinePanel.Visibility = builtIn ? Visibility.Collapsed : Visibility.Visible;
+            if (!builtIn) RefreshSavedPresets();
+        });
+        select = setSelected;
+        TabHost.Children.Add(root);
     }
 
     private void Preset_Click(object sender, RoutedEventArgs e)

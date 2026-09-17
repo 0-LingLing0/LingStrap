@@ -26,7 +26,7 @@ public partial class ModsView : Page
         CursorSlotsPanel.Children.Add(mouseSlot);
         CursorSlotsPanel.Children.Add(shiftlockSlot);
 
-        ModsPathText.Text = Paths.Mods;
+        ModsFolderRow.Description = Paths.Mods;
 
         _loading = false;
     }
