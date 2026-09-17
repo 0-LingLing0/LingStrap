@@ -8,9 +8,9 @@
             <ui:SymbolIcon Symbol="PaintBrush24" Style="{StaticResource HeaderIcon}" />
             <TextBlock Text="Appearance" Style="{StaticResource H1}" Margin="0" VerticalAlignment="Center" />
         </StackPanel>
-        <TextBlock Style="{StaticResource Sub}" Text="Pick an accent color for the app." />
+        <TextBlock Style="{StaticResource Sub}" Text="Pick an accent color for the app - a theme color, or any color you like." />
 
-        <WrapPanel x:Name="SwatchPanel" Margin="0,20,0,0" />
+        <Border x:Name="PickerHost" Margin="0,20,0,4" />
 
         <ui:CardControl Margin="0,20,0,8">
             <ui:CardControl.Header>

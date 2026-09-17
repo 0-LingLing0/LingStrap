@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -35,7 +36,7 @@ public partial class AppearanceView : Page
             : null;
         _pendingLightTheme = SettingsService.Current.LightTheme;
 
-        Populate();
+        BuildPicker();
         LightThemeToggle.IsChecked = _pendingLightTheme;
         SelectClosestFontScale(SettingsService.Current.FontScalePercent);
         UpdatePreview();
@@ -118,145 +119,6 @@ public partial class AppearanceView : Page
         SettingsService.Save();
     }
 
-    private void Populate()
-    {
-        SwatchPanel.Children.Clear();
-        var current = _pendingAccentName;
-
-        foreach (var theme in ColorThemeCatalog.All)
-        {
-            var isSelected = theme.Name == current;
-            var name = theme.Name;
-            SwatchPanel.Children.Add(BuildSwatch(theme.Base, theme.Name, isSelected, () => Select(name)));
-        }
-
-        var isCustomSelected = current == ColorThemeCatalog.CustomThemeName;
-        // _pendingCustomColor always, not just while custom is the active theme - switching to a
-        // built-in preset and back should still find your last custom color waiting in this slot
-        // instead of resetting it to a blank "add" button.
-        SwatchPanel.Children.Add(BuildCustomSwatch(_pendingCustomColor, isCustomSelected));
-    }
-
-    private static Border BuildSwatch(Color color, string tooltip, bool isSelected, Action onSelect)
-    {
-        var swatch = new Border
-        {
-            Width = 60,
-            Height = 60,
-            Margin = new Thickness(0, 0, 14, 14),
-            CornerRadius = new CornerRadius(30),
-            Background = new SolidColorBrush(color),
-            BorderBrush = Brushes.White,
-            BorderThickness = new Thickness(isSelected ? 3 : 0),
-            Cursor = Cursors.Hand,
-            ToolTip = tooltip,
-            RenderTransformOrigin = new Point(0.5, 0.5),
-            RenderTransform = new ScaleTransform(1, 1),
-            Effect = new DropShadowEffect
-            {
-                Color = color,
-                BlurRadius = 14,
-                ShadowDepth = 0,
-                Opacity = 0.55,
-            },
-        };
-
-        if (isSelected)
-        {
-            swatch.Child = new SymbolIcon
-            {
-                Symbol = SymbolRegular.Checkmark24,
-                Foreground = Brushes.White,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-            };
-        }
-
-        swatch.MouseLeftButtonUp += (_, _) => onSelect();
-        swatch.MouseEnter += (_, _) => AnimateSwatchScale(swatch, 1.08);
-        swatch.MouseLeave += (_, _) => AnimateSwatchScale(swatch, 1.0);
-
-        return swatch;
-    }
-
-    /// <summary>The last tile in the row: a dashed "add" circle normally, or the picked color itself
-    /// with a permanent pencil icon once a custom color is the active theme - the pencil (rather than
-    /// the checkmark every other swatch uses) is what signals "click to edit", so it never looks like
-    /// just another plain preset swatch. Selection is still shown the normal way, via the white ring
-    /// border BuildSwatch's siblings use - this just skips BuildSwatch to always show the pencil
-    /// instead of switching to a checkmark when selected.</summary>
-    private Border BuildCustomSwatch(Color? activeCustomColor, bool isSelected)
-    {
-        if (activeCustomColor is { } color)
-        {
-            var customSwatch = new Border
-            {
-                Width = 60,
-                Height = 60,
-                Margin = new Thickness(0, 0, 14, 14),
-                CornerRadius = new CornerRadius(30),
-                Background = new SolidColorBrush(color),
-                BorderBrush = Brushes.White,
-                BorderThickness = new Thickness(isSelected ? 3 : 0),
-                Cursor = Cursors.Hand,
-                ToolTip = "Custom - click to edit",
-                RenderTransformOrigin = new Point(0.5, 0.5),
-                RenderTransform = new ScaleTransform(1, 1),
-                Effect = new DropShadowEffect { Color = color, BlurRadius = 14, ShadowDepth = 0, Opacity = 0.55 },
-                Child = new SymbolIcon
-                {
-                    Symbol = SymbolRegular.Edit24,
-                    Foreground = Brushes.White,
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    VerticalAlignment = VerticalAlignment.Center,
-                },
-            };
-
-            customSwatch.MouseLeftButtonUp += (_, _) => OpenCustomColorPicker();
-            customSwatch.MouseEnter += (_, _) => AnimateSwatchScale(customSwatch, 1.08);
-            customSwatch.MouseLeave += (_, _) => AnimateSwatchScale(customSwatch, 1.0);
-
-            return customSwatch;
-        }
-
-        // Transparent background means this swatch's only contrast comes from its own border/icon
-        // color against the page behind it - a translucent white (fine on the normal dark page) was
-        // nearly invisible on the light theme variant, since that page background is itself close to
-        // white. Picks the dim color from whichever theme is actually running right now (the page's
-        // real background doesn't follow _pendingLightTheme until the restart Apply triggers).
-        var dim = SettingsService.Current.LightTheme
-            ? Color.FromArgb(0x80, 0x1B, 0x1B, 0x1F)
-            : Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF);
-
-        var swatch = new Border
-        {
-            Width = 60,
-            Height = 60,
-            Margin = new Thickness(0, 0, 14, 14),
-            CornerRadius = new CornerRadius(30),
-            Background = Brushes.Transparent,
-            BorderBrush = new SolidColorBrush(dim),
-            BorderThickness = new Thickness(2),
-            Cursor = Cursors.Hand,
-            ToolTip = "Pick a custom color",
-            RenderTransformOrigin = new Point(0.5, 0.5),
-            RenderTransform = new ScaleTransform(1, 1),
-            Child = new SymbolIcon
-            {
-                Symbol = SymbolRegular.Add24,
-                Foreground = new SolidColorBrush(dim),
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-            },
-        };
-
-        swatch.MouseLeftButtonUp += (_, _) => OpenCustomColorPicker();
-        swatch.MouseEnter += (_, _) => AnimateSwatchScale(swatch, 1.08);
-        swatch.MouseLeave += (_, _) => AnimateSwatchScale(swatch, 1.0);
-
-        return swatch;
-    }
-
     private static void AnimateSwatchScale(Border swatch, double to)
     {
         if (swatch.RenderTransform is not ScaleTransform transform) return;
@@ -268,49 +130,22 @@ public partial class AppearanceView : Page
         transform.BeginAnimation(ScaleTransform.ScaleYProperty, animation);
     }
 
-    private void Select(string name)
-    {
-        if (name == _pendingAccentName) return;
-
-        _pendingAccentName = name;
-        Populate();
-        UpdatePreview();
-        UpdateApplyButtonState();
-    }
-
-    private async void OpenCustomColorPicker()
-    {
-        // Falls back to the last custom color ever picked, even if a catalog preset is currently
-        // pending - otherwise switching to a preset and back to "+" would lose the color you'd
-        // picked and force you to start over instead of just reopening this.
-        var initial = _pendingCustomColor ?? PendingAccentColor;
-
-        var picked = initial;
-        var content = BuildColorPickerContent(initial, ColorThemeCatalog.CurrentAccentColor(), c => picked = c);
-
-        var confirmed = await DialogHelper.ShowConfirmAsync(this, content, "Pick a custom color", confirmText: "Use this color");
-        if (!confirmed) return;
-
-        _pendingAccentName = ColorThemeCatalog.CustomThemeName;
-        _pendingCustomColor = picked;
-
-        Populate();
-        UpdatePreview();
-        UpdateApplyButtonState();
-    }
-
     private const int WheelSize = 200;
     private const int BrightnessBarWidth = 26;
 
     /// <summary>
-    /// A click/drag hue+saturation wheel with a brightness bar beside it, the color being replaced
-    /// shown next to the one being picked, a hex field, R/G/B readouts and the catalog colors as
-    /// starting points - laid out in two columns so the wheel doesn't squeeze everything else into a
-    /// strip beneath it. WPF-UI 4.3.0's own ColorPicker control is an internal, unimplemented stub,
-    /// so this is hand-built rather than reusing a library control.
+    /// The whole accent picker, built straight into the page: a click/drag hue+saturation wheel with a
+    /// brightness bar beside it, the color currently applied shown next to the one being picked, a hex
+    /// field, R/G/B readouts, and the catalog's own theme colors. This used to be a row of big swatches
+    /// on the page with everything else buried behind a "pick a custom color" dialog - the theme colors
+    /// are just the quick picks within the same control now, so choosing one and then nudging it is a
+    /// single, visible flow instead of two separate places. WPF-UI 4.3.0's own ColorPicker control is
+    /// an internal, unimplemented stub, so this is hand-built rather than reusing a library control.
     /// </summary>
-    private static FrameworkElement BuildColorPickerContent(Color initial, Color current, Action<Color> onChanged)
+    private void BuildPicker()
     {
+        var initial = PendingAccentColor;
+        var current = ColorThemeCatalog.CurrentAccentColor();
         var (initHue, initSat, initValue) = RgbToHsv(initial.R, initial.G, initial.B);
         double hue = initHue, sat = initSat, value = initValue;
         var updating = false;
@@ -368,12 +203,16 @@ public partial class AppearanceView : Page
         leftColumn.Children.Add(barCanvas);
 
         // ---- right column: what you're changing, and the numbers behind it ----
+        // A hairline down the middle, so the two halves still read as two even while they're the same
+        // color - which is exactly the state the page opens in.
         var newSwatch = new Border
         {
             Height = 54,
             Background = new SolidColorBrush(initial),
             CornerRadius = new CornerRadius(0, 8, 8, 0),
+            BorderThickness = new Thickness(1, 0, 0, 0),
         };
+        newSwatch.SetResourceReference(Border.BorderBrushProperty, "ApplicationBackgroundBrush");
         var compare = new Grid { Margin = new Thickness(0, 0, 0, 16) };
         compare.ColumnDefinitions.Add(new ColumnDefinition());
         compare.ColumnDefinitions.Add(new ColumnDefinition());
@@ -388,33 +227,33 @@ public partial class AppearanceView : Page
         compare.Children.Add(oldSwatch);
         compare.Children.Add(newSwatch);
 
+        // The "#" sits outside the box rather than inside it: WPF-UI's TextBox draws its own frame
+        // from a ControlTemplate, so a borderless TextBox nested in a styled Border just renders a
+        // stubby second box floating inside the first one.
         var hexBox = new System.Windows.Controls.TextBox
         {
             Text = ColorThemeCatalog.ToHex(initial),
             MaxLength = 6,
-            BorderThickness = new Thickness(0),
-            Background = Brushes.Transparent,
             FontFamily = new FontFamily("Consolas"),
             VerticalContentAlignment = VerticalAlignment.Center,
-            MinWidth = 90,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
         };
-        var hexRow = new Border
-        {
-            CornerRadius = new CornerRadius(6),
-            Padding = new Thickness(10, 2, 10, 2),
-            BorderThickness = new Thickness(1),
-            Margin = new Thickness(0, 0, 0, 14),
-        };
-        hexRow.SetResourceReference(Border.BackgroundProperty, "ControlFillColorDefaultBrush");
-        hexRow.SetResourceReference(Border.BorderBrushProperty, "ControlStrokeColorDefaultBrush");
-        var hexInner = new StackPanel { Orientation = Orientation.Horizontal };
+        var hexRow = new Grid { Margin = new Thickness(0, 0, 0, 14) };
+        hexRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        hexRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         var hash = new System.Windows.Controls.TextBlock
         {
-            Text = "#", FontFamily = new FontFamily("Consolas"), VerticalAlignment = VerticalAlignment.Center, Opacity = 0.6,
+            Text = "#",
+            FontFamily = new FontFamily("Consolas"),
+            FontSize = 15,
+            VerticalAlignment = VerticalAlignment.Center,
+            Opacity = 0.55,
+            Margin = new Thickness(0, 0, 7, 0),
         };
-        hexInner.Children.Add(hash);
-        hexInner.Children.Add(hexBox);
-        hexRow.Child = hexInner;
+        Grid.SetColumn(hash, 0);
+        Grid.SetColumn(hexBox, 1);
+        hexRow.Children.Add(hash);
+        hexRow.Children.Add(hexBox);
 
         var rgbGrid = new Grid { Margin = new Thickness(0, 0, 0, 14) };
         for (var i = 0; i < 3; i++) rgbGrid.ColumnDefinitions.Add(new ColumnDefinition());
@@ -465,7 +304,30 @@ public partial class AppearanceView : Page
         root.Children.Add(rightColumn);
 
         // ---- keeping every piece in sync ----
-        void Redraw(bool skipHexBox)
+        var swatches = new List<(Border Swatch, string Name)>();
+
+        void RefreshSelection()
+        {
+            foreach (var (swatch, name) in swatches)
+            {
+                var selected = name == _pendingAccentName;
+                swatch.BorderThickness = new Thickness(selected ? 3 : 0);
+                swatch.Child = selected
+                    ? new SymbolIcon
+                    {
+                        Symbol = SymbolRegular.Checkmark24,
+                        Foreground = Brushes.White,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center,
+                    }
+                    : null;
+            }
+        }
+
+        /// presetName names a catalog theme when one was clicked, and is null when the color came from
+        /// the wheel, the bar or the hex box - which is what makes the accent Custom. commit is false
+        /// only for the very first paint, so building the page doesn't mark it as an unsaved change.
+        void Redraw(bool skipHexBox, string? presetName, bool commit)
         {
             var (r, g, b) = HsvToRgb(hue, sat, value);
             var color = Color.FromRgb(r, g, b);
@@ -488,7 +350,28 @@ public partial class AppearanceView : Page
             Canvas.SetTop(indicator, WheelSize / 2.0 + radius * Math.Sin(angleRad) - indicator.Height / 2);
             Canvas.SetTop(barHandle, (1 - value) * WheelSize - barHandle.Height / 2);
 
-            onChanged(color);
+            if (!commit)
+            {
+                RefreshSelection();
+                return;
+            }
+
+            if (presetName != null)
+            {
+                // A catalog theme carries hand-tuned light/dark variants that an arbitrary color has
+                // to derive algorithmically - so picking one stays that named theme rather than
+                // collapsing into "Custom" with the same base color.
+                _pendingAccentName = presetName;
+            }
+            else
+            {
+                _pendingAccentName = ColorThemeCatalog.CustomThemeName;
+                _pendingCustomColor = color;
+            }
+
+            RefreshSelection();
+            UpdatePreview();
+            UpdateApplyButtonState();
         }
 
         void PickFromWheel(Point p)
@@ -500,7 +383,7 @@ public partial class AppearanceView : Page
             if (angle < 0) angle += 2 * Math.PI;
             hue = angle * 180.0 / Math.PI;
             sat = radius / (WheelSize / 2.0);
-            Redraw(false);
+            Redraw(false, null, true);
         }
 
         wheelCanvas.MouseLeftButtonDown += (_, e) => { wheelCanvas.CaptureMouse(); PickFromWheel(e.GetPosition(wheelCanvas)); };
@@ -510,7 +393,7 @@ public partial class AppearanceView : Page
         void PickFromBar(Point p)
         {
             value = Math.Clamp(1 - p.Y / WheelSize, 0, 1);
-            Redraw(false);
+            Redraw(false, null, true);
         }
 
         barCanvas.MouseLeftButtonDown += (_, e) => { barCanvas.CaptureMouse(); PickFromBar(e.GetPosition(barCanvas)); };
@@ -529,7 +412,7 @@ public partial class AppearanceView : Page
             (hue, sat, value) = RgbToHsv(color.R, color.G, color.B);
 
             updating = true;
-            Redraw(true); // leave the box alone while it's being typed into
+            Redraw(true, null, true); // leave the box alone while it's being typed into
             updating = false;
         };
 
@@ -537,25 +420,36 @@ public partial class AppearanceView : Page
         {
             var swatch = new Border
             {
-                Width = 26,
-                Height = 26,
-                Margin = new Thickness(0, 0, 7, 7),
-                CornerRadius = new CornerRadius(13),
+                Width = 38,
+                Height = 38,
+                Margin = new Thickness(0, 0, 8, 8),
+                CornerRadius = new CornerRadius(19),
                 Background = new SolidColorBrush(theme.Base),
+                BorderBrush = Brushes.White,
+                BorderThickness = new Thickness(0),
                 Cursor = Cursors.Hand,
-                ToolTip = $"Start from {theme.Name}",
+                ToolTip = theme.Name,
+                RenderTransformOrigin = new Point(0.5, 0.5),
+                RenderTransform = new ScaleTransform(1, 1),
+                Effect = new DropShadowEffect { Color = theme.Base, BlurRadius = 12, ShadowDepth = 0, Opacity = 0.5 },
             };
+
             var baseColor = theme.Base;
+            var themeName = theme.Name;
             swatch.MouseLeftButtonUp += (_, _) =>
             {
                 (hue, sat, value) = RgbToHsv(baseColor.R, baseColor.G, baseColor.B);
-                Redraw(false);
+                Redraw(false, themeName, true);
             };
+            swatch.MouseEnter += (_, _) => AnimateSwatchScale(swatch, 1.1);
+            swatch.MouseLeave += (_, _) => AnimateSwatchScale(swatch, 1.0);
+
+            swatches.Add((swatch, theme.Name));
             presets.Children.Add(swatch);
         }
 
-        Redraw(false);
-        return root;
+        Redraw(false, null, false);
+        PickerHost.Child = root;
     }
 
     private static System.Windows.Controls.TextBlock SectionLabel(string text)
