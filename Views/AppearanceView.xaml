@@ -3,61 +3,115 @@
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
       Title="Appearance">
-    <StackPanel Margin="28,24,28,24">
-        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-            <ui:SymbolIcon Symbol="PaintBrush24" Style="{StaticResource HeaderIcon}" />
-            <TextBlock Text="Appearance" Style="{StaticResource H1}" Margin="0" VerticalAlignment="Center" />
-        </StackPanel>
-        <TextBlock Style="{StaticResource Sub}" Text="Pick an accent color for the app - a theme color, or any color you like." />
+    <StackPanel Margin="28,24,28,28">
 
-        <Border x:Name="PickerHost" Margin="0,20,0,4" />
-
-        <ui:CardControl Margin="0,20,0,8">
-            <ui:CardControl.Header>
-                <StackPanel>
-                    <TextBlock Text="Light theme" Style="{StaticResource Body}" FontWeight="SemiBold" />
-                    <TextBlock Style="{StaticResource Sub}" Margin="0,4,0,0" MaxWidth="450"
-                               Text="Switches from the default dark look to a light one." />
-                </StackPanel>
-            </ui:CardControl.Header>
-            <ui:ToggleSwitch x:Name="LightThemeToggle" Checked="PendingSetting_Changed" Unchecked="PendingSetting_Changed" />
-        </ui:CardControl>
-
-        <TextBlock Text="Preview" Style="{StaticResource Body}" FontWeight="SemiBold" Margin="0,4,0,8" />
-        <Border x:Name="PreviewSurface" CornerRadius="8" Padding="20" BorderThickness="1"
-                BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" Margin="0,0,0,8">
+        <!-- Header: the page title on the left, and the one action the page has on the right, so
+             it's visible from anywhere on the page instead of buried between two sections. -->
+        <Grid Margin="0,0,0,22">
             <StackPanel>
-                <TextBlock x:Name="PreviewText" Text="This is what Lingstrap will look like." FontWeight="SemiBold" Margin="0,0,0,14" />
-                <StackPanel Orientation="Horizontal">
-                    <Border x:Name="PreviewButton" CornerRadius="4" Padding="16,8" Margin="0,0,14,0">
-                        <TextBlock Text="Sample button" Foreground="White" FontSize="13" FontWeight="SemiBold" />
-                    </Border>
-                    <Border x:Name="PreviewToggleTrack" Width="40" Height="20" CornerRadius="10" VerticalAlignment="Center">
-                        <Ellipse Width="14" Height="14" Fill="White" HorizontalAlignment="Right" Margin="0,0,3,0" />
-                    </Border>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                    <ui:SymbolIcon Symbol="PaintBrush24" Style="{StaticResource HeaderIcon}" />
+                    <TextBlock Text="Appearance" Style="{StaticResource H1}" Margin="0" VerticalAlignment="Center" />
                 </StackPanel>
+                <TextBlock Style="{StaticResource Sub}" Text="Pick an accent color and theme. The preview updates as you go." />
             </StackPanel>
-        </Border>
 
-        <ui:Button x:Name="ApplyButton" Content="Apply and restart" Appearance="Primary" Margin="0,0,0,20"
-                   HorizontalAlignment="Left" IsEnabled="False" Click="Apply_Click" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <TextBlock x:Name="DirtyHint" Style="{StaticResource Sub}" Margin="0,0,14,0"
+                           VerticalAlignment="Center" Visibility="Collapsed"
+                           Text="Lingstrap restarts to apply these" />
+                <ui:Button x:Name="ApplyButton" Content="Apply and restart" Appearance="Primary"
+                           IsEnabled="False" Click="Apply_Click" />
+            </StackPanel>
+        </Grid>
 
-        <ui:CardControl Margin="0,0,0,8">
-            <ui:CardControl.Header>
-                <StackPanel>
-                    <TextBlock Text="UI scale" Style="{StaticResource Body}" FontWeight="SemiBold" />
-                    <TextBlock Style="{StaticResource Sub}" Margin="0,4,0,0" MaxWidth="450"
-                               Text="Makes the whole app bigger or smaller. Applies instantly." />
-                </StackPanel>
-            </ui:CardControl.Header>
-            <ComboBox x:Name="FontScaleCombo" Width="120" SelectionChanged="FontScaleCombo_SelectionChanged">
-                <ComboBoxItem Content="80%" Tag="80" />
-                <ComboBoxItem Content="90%" Tag="90" />
-                <ComboBoxItem Content="100%" Tag="100" />
-                <ComboBoxItem Content="110%" Tag="110" />
-                <ComboBoxItem Content="125%" Tag="125" />
-                <ComboBoxItem Content="150%" Tag="150" />
-            </ComboBox>
-        </ui:CardControl>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MinWidth="380" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Left: everything you change -->
+            <!-- No panel fills behind these: a lighter rectangle per section made each one read as a
+                 separate block sitting on the page rather than part of it. The captions and the
+                 spacing carry the grouping instead, so the whole page is one surface. -->
+            <StackPanel Grid.Column="0">
+                <TextBlock Text="ACCENT COLOR" Style="{StaticResource SectionCaption}" />
+                <Border x:Name="PickerHost" Margin="0,0,0,26" />
+
+                <TextBlock Text="THEME" Style="{StaticResource SectionCaption}" />
+                <Border x:Name="ThemeHost" Margin="0,0,0,26" />
+
+                <TextBlock Text="UI SCALE" Style="{StaticResource SectionCaption}" />
+                <Border x:Name="ScaleHost" />
+                <TextBlock Style="{StaticResource Sub}" Margin="2,9,0,0"
+                           Text="Applies straight away - no restart needed for this one." />
+            </StackPanel>
+
+            <!-- Right: a small stand-in for the real window, so the accent and theme are shown
+                 together on the surfaces they actually land on rather than one loose button. -->
+            <StackPanel Grid.Column="1" Width="262" Margin="22,0,0,0" VerticalAlignment="Top">
+                <TextBlock Text="PREVIEW" Style="{StaticResource SectionCaption}" />
+                <!-- This one keeps a frame on purpose: it stands in for a separate window, so it
+                     should read as an object. The shadow is what makes it read as deliberately
+                     raised off the page rather than a flat patch of the wrong color. -->
+                <Border x:Name="PreviewSurface" CornerRadius="10" BorderThickness="1" ClipToBounds="True"
+                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}">
+                    <Border.Effect>
+                        <DropShadowEffect Color="Black" BlurRadius="22" ShadowDepth="5" Direction="270" Opacity="0.38" />
+                    </Border.Effect>
+                    <StackPanel>
+                        <Border x:Name="PreviewTitleBar" Height="32" Padding="12,0">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Border x:Name="PreviewLogo" Width="14" Height="14" CornerRadius="4" Margin="0,0,9,0" />
+                                <TextBlock x:Name="PreviewTitle" Text="Lingstrap" FontSize="11" />
+                            </StackPanel>
+                        </Border>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="78" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" Margin="7,10,3,12">
+                                <Border x:Name="PreviewNavActive" CornerRadius="5" Padding="9,6" Margin="0,0,0,3">
+                                    <StackPanel Orientation="Horizontal">
+                                        <Border x:Name="PreviewNavBar" Width="3" CornerRadius="2" Margin="0,0,7,0" />
+                                        <TextBlock x:Name="PreviewNavActiveText" Text="Home" FontSize="11" FontWeight="SemiBold" />
+                                    </StackPanel>
+                                </Border>
+                                <TextBlock x:Name="PreviewNavIdle1" Text="Presets" FontSize="11" Margin="19,6,0,0" />
+                                <TextBlock x:Name="PreviewNavIdle2" Text="Mods" FontSize="11" Margin="19,9,0,0" />
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1" Margin="6,12,14,14">
+                                <TextBlock x:Name="PreviewHeading" Text="Home" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,9" />
+
+                                <Border x:Name="PreviewInnerCard" CornerRadius="7" Padding="11,10,11,11" Margin="0,0,0,11">
+                                    <StackPanel>
+                                        <TextBlock x:Name="PreviewCardText" Text="Launch Roblox with your settings applied."
+                                                   FontSize="11" TextWrapping="Wrap" Margin="0,0,0,10" />
+                                        <StackPanel Orientation="Horizontal">
+                                            <Border x:Name="PreviewButton" CornerRadius="4" Padding="13,6" Margin="0,0,10,0">
+                                                <TextBlock x:Name="PreviewButtonText" Text="Launch" FontSize="11" FontWeight="SemiBold" />
+                                            </Border>
+                                            <Border x:Name="PreviewToggleTrack" Width="34" Height="18" CornerRadius="9"
+                                                    VerticalAlignment="Center">
+                                                <Ellipse Width="12" Height="12" Fill="White" HorizontalAlignment="Right" Margin="0,0,3,0" />
+                                            </Border>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border x:Name="PreviewTrack" Height="6" CornerRadius="3">
+                                    <Border x:Name="PreviewFill" Width="104" HorizontalAlignment="Left" CornerRadius="3" />
+                                </Border>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Grid>
     </StackPanel>
 </Page>

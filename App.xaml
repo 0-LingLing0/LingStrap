@@ -84,6 +84,17 @@
                 <Setter Property="MaxWidth" Value="600" />
                 <Setter Property="HorizontalAlignment" Value="Left" />
             </Style>
+
+            <!-- A small all-caps caption sitting directly above the thing it names, for pages laid out
+                 as labelled panels rather than a list of cards (SectionHeader is the heavier, more
+                 spaced-out divider used between groups of cards). -->
+            <Style x:Key="SectionCaption" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="11" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                <Setter Property="Margin" Value="2,0,0,7" />
+            </Style>
+
         </ResourceDictionary>
     </Application.Resources>
 </Application>

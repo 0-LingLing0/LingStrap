@@ -37,8 +37,8 @@ public partial class AppearanceView : Page
         _pendingLightTheme = SettingsService.Current.LightTheme;
 
         BuildPicker();
-        LightThemeToggle.IsChecked = _pendingLightTheme;
-        SelectClosestFontScale(SettingsService.Current.FontScalePercent);
+        BuildThemeChooser();
+        BuildScaleChooser();
         UpdatePreview();
         _loading = false;
     }
@@ -47,30 +47,167 @@ public partial class AppearanceView : Page
         ? _pendingCustomColor ?? ColorThemeCatalog.Find(SettingsService.Current.AccentTheme).Base
         : ColorThemeCatalog.Find(_pendingAccentName).Base;
 
-    private void PendingSetting_Changed(object sender, RoutedEventArgs e)
+    // ---- theme and scale choosers ------------------------------------------------------------
+
+    /// <summary>Dark and Light as two labelled options rather than one unlabelled switch - a toggle
+    /// left you to infer that "off" meant dark, and gave the light option no name at all.</summary>
+    private void BuildThemeChooser()
     {
-        if (_loading) return;
-        _pendingLightTheme = LightThemeToggle.IsChecked == true;
-        UpdatePreview();
-        UpdateApplyButtonState();
+        Action<int>? select = null;
+        var (root, setSelected) = BuildSegmented(new[] { "Dark", "Light" }, _pendingLightTheme ? 1 : 0, index =>
+        {
+            _pendingLightTheme = index == 1;
+            select?.Invoke(index);
+            UpdatePreview();
+            UpdateApplyButtonState();
+        });
+        select = setSelected;
+        ThemeHost.Child = root;
     }
 
-    /// <summary>Manually-colored stand-ins for real WPF-UI controls, rather than the real
-    /// button/toggle - those resolve their accent brush once at startup (see RestartAppAsync), so they
-    /// wouldn't move until after the very restart this preview exists to preview before committing.</summary>
+    private static readonly int[] ScalePercents = { 80, 90, 100, 110, 125, 150 };
+
+    private void BuildScaleChooser()
+    {
+        // Whichever preset is closest to the stored value, in case an older build saved a percentage
+        // (from the slider this used to be) that isn't one of them.
+        var stored = SettingsService.Current.FontScalePercent;
+        var closest = 0;
+        for (var i = 1; i < ScalePercents.Length; i++)
+        {
+            if (Math.Abs(ScalePercents[i] - stored) < Math.Abs(ScalePercents[closest] - stored)) closest = i;
+        }
+
+        Action<int>? select = null;
+        var labels = Array.ConvertAll(ScalePercents, p => p + "%");
+        var (root, setSelected) = BuildSegmented(labels, closest, index =>
+        {
+            select?.Invoke(index);
+            if (_loading) return;
+
+            var percent = ScalePercents[index];
+            (Window.GetWindow(this) as MainWindow)?.ApplyFontScale(percent);
+            SettingsService.Current.FontScalePercent = percent;
+            SettingsService.Save();
+        });
+        select = setSelected;
+        ScaleHost.Child = root;
+    }
+
+    /// <summary>A row of chips acting as one control: the selected one carries the accent, the rest
+    /// are plain. Returns the panel plus the callback that moves the selection, so the click handler
+    /// can decide whether a click should actually take.</summary>
+    private static (FrameworkElement Root, Action<int> SetSelected) BuildSegmented(
+        string[] labels, int selectedIndex, Action<int> onSelect)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        var chips = new List<Border>();
+
+        for (var i = 0; i < labels.Length; i++)
+        {
+            var text = new System.Windows.Controls.TextBlock
+            {
+                Text = labels[i],
+                FontSize = 13,
+                FontWeight = FontWeights.SemiBold,
+                HorizontalAlignment = HorizontalAlignment.Center,
+            };
+            var chip = new Border
+            {
+                CornerRadius = new CornerRadius(7),
+                Padding = new Thickness(18, 8, 18, 8),
+                Margin = new Thickness(0, 0, 8, 0),
+                Cursor = Cursors.Hand,
+                BorderThickness = new Thickness(1),
+                Child = text,
+            };
+
+            var index = i;
+            chip.MouseLeftButtonUp += (_, _) => onSelect(index);
+            chips.Add(chip);
+            row.Children.Add(chip);
+        }
+
+        void SetSelected(int index)
+        {
+            for (var i = 0; i < chips.Count; i++)
+            {
+                var selected = i == index;
+                var label = (System.Windows.Controls.TextBlock)chips[i].Child;
+
+                if (selected)
+                {
+                    chips[i].SetResourceReference(Border.BackgroundProperty, "AccentFillColorDefaultBrush");
+                    chips[i].SetResourceReference(Border.BorderBrushProperty, "AccentFillColorDefaultBrush");
+                    label.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, "TextOnAccentFillColorPrimaryBrush");
+                }
+                else
+                {
+                    chips[i].SetResourceReference(Border.BackgroundProperty, "ControlFillColorDefaultBrush");
+                    chips[i].SetResourceReference(Border.BorderBrushProperty, "ControlStrokeColorDefaultBrush");
+                    label.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, "TextFillColorPrimaryBrush");
+                }
+            }
+        }
+
+        SetSelected(selectedIndex);
+        return (row, SetSelected);
+    }
+
+    // ---- preview -----------------------------------------------------------------------------
+
+    /// <summary>
+    /// A small stand-in for the real window rather than real WPF-UI controls: those resolve their
+    /// accent brush once at startup (see RestartAppAsync), so they wouldn't move until after the very
+    /// restart this preview exists to preview before committing. Showing a nav rail, a card and a
+    /// couple of controls together puts the accent on the surfaces it actually lands on, which one
+    /// loose sample button never did.
+    /// </summary>
     private void UpdatePreview()
     {
         var accent = PendingAccentColor;
+        var accentBrush = new SolidColorBrush(accent);
+
         var background = _pendingLightTheme ? Color.FromRgb(0xF4, 0xF4, 0xF7) : Color.FromRgb(0x16, 0x17, 0x1F);
+        var chrome = _pendingLightTheme ? Color.FromRgb(0xEA, 0xEA, 0xF0) : Color.FromRgb(0x1C, 0x1D, 0x27);
+        var card = _pendingLightTheme ? Color.FromRgb(0xFF, 0xFF, 0xFF) : Color.FromRgb(0x22, 0x23, 0x2E);
         var foreground = _pendingLightTheme ? Color.FromRgb(0x1B, 0x1B, 0x1F) : Colors.White;
+        var muted = _pendingLightTheme ? Color.FromRgb(0x5F, 0x63, 0x76) : Color.FromRgb(0x8B, 0x90, 0xA6);
 
         PreviewSurface.Background = new SolidColorBrush(background);
-        PreviewText.Foreground = new SolidColorBrush(foreground);
-        PreviewButton.Background = new SolidColorBrush(accent);
-        PreviewToggleTrack.Background = new SolidColorBrush(accent);
+        PreviewTitleBar.Background = new SolidColorBrush(chrome);
+        PreviewInnerCard.Background = new SolidColorBrush(card);
+        PreviewTrack.Background = new SolidColorBrush(chrome);
+
+        PreviewLogo.Background = accentBrush;
+        PreviewButton.Background = accentBrush;
+        PreviewToggleTrack.Background = accentBrush;
+        PreviewNavBar.Background = accentBrush;
+        PreviewFill.Background = accentBrush;
+        // The same faint accent wash the real nav rail uses behind its selected item.
+        PreviewNavActive.Background = new SolidColorBrush(Color.FromArgb(0x24, accent.R, accent.G, accent.B));
+
+        var text = new SolidColorBrush(foreground);
+        var mutedText = new SolidColorBrush(muted);
+        PreviewTitle.Foreground = mutedText;
+        PreviewHeading.Foreground = text;
+        PreviewNavActiveText.Foreground = text;
+        PreviewNavIdle1.Foreground = mutedText;
+        PreviewNavIdle2.Foreground = mutedText;
+        PreviewCardText.Foreground = mutedText;
+        PreviewButtonText.Foreground = new SolidColorBrush(IsLight(accent) ? Color.FromRgb(0x1B, 0x1B, 0x1F) : Colors.White);
     }
 
-    private void UpdateApplyButtonState() => ApplyButton.IsEnabled = IsDirty();
+    /// <summary>Perceived brightness, so label text on an accent-filled button stays readable on a
+    /// pale yellow as well as on a deep indigo.</summary>
+    private static bool IsLight(Color c) => (c.R * 299 + c.G * 587 + c.B * 114) / 1000 > 140;
+
+    private void UpdateApplyButtonState()
+    {
+        var dirty = IsDirty();
+        ApplyButton.IsEnabled = dirty;
+        DirtyHint.Visibility = dirty ? Visibility.Visible : Visibility.Collapsed;
+    }
 
     private bool IsDirty()
     {
@@ -94,31 +231,6 @@ public partial class AppearanceView : Page
         await RestartAppAsync();
     }
 
-    /// <summary>Picks whichever preset is numerically closest to a stored value, in case an older
-    /// build stored a percentage (from the slider this used to be) that isn't one of the presets.</summary>
-    private void SelectClosestFontScale(int percent)
-    {
-        ComboBoxItem? closest = null;
-        var closestDiff = int.MaxValue;
-        foreach (ComboBoxItem item in FontScaleCombo.Items)
-        {
-            var diff = Math.Abs(int.Parse((string)item.Tag) - percent);
-            if (diff >= closestDiff) continue;
-            closestDiff = diff;
-            closest = item;
-        }
-        FontScaleCombo.SelectedItem = closest;
-    }
-
-    private void FontScaleCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (_loading || FontScaleCombo.SelectedItem is not ComboBoxItem item) return;
-        var percent = int.Parse((string)item.Tag);
-        (Window.GetWindow(this) as MainWindow)?.ApplyFontScale(percent);
-        SettingsService.Current.FontScalePercent = percent;
-        SettingsService.Save();
-    }
-
     private static void AnimateSwatchScale(Border swatch, double to)
     {
         if (swatch.RenderTransform is not ScaleTransform transform) return;
@@ -130,8 +242,8 @@ public partial class AppearanceView : Page
         transform.BeginAnimation(ScaleTransform.ScaleYProperty, animation);
     }
 
-    private const int WheelSize = 200;
-    private const int BrightnessBarWidth = 26;
+    private const int WheelSize = 180;
+    private const int BrightnessBarWidth = 24;
 
     /// <summary>
     /// The whole accent picker, built straight into the page: a click/drag hue+saturation wheel with a
@@ -284,24 +396,30 @@ public partial class AppearanceView : Page
             rgbGrid.Children.Add(cell);
         }
 
-        var presets = new WrapPanel();
-
-        var rightColumn = new StackPanel { MinWidth = 196, Margin = new Thickness(20, 0, 0, 0) };
+        var rightColumn = new StackPanel { MinWidth = 160, Margin = new Thickness(18, 0, 0, 0) };
         rightColumn.Children.Add(SectionLabel("Current  /  New"));
         rightColumn.Children.Add(compare);
         rightColumn.Children.Add(SectionLabel("Hex"));
         rightColumn.Children.Add(hexRow);
         rightColumn.Children.Add(rgbGrid);
-        rightColumn.Children.Add(SectionLabel("Theme colors"));
-        rightColumn.Children.Add(presets);
 
-        var root = new Grid();
-        root.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        var topRow = new Grid();
+        topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        topRow.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         Grid.SetColumn(leftColumn, 0);
         Grid.SetColumn(rightColumn, 1);
-        root.Children.Add(leftColumn);
-        root.Children.Add(rightColumn);
+        topRow.Children.Add(leftColumn);
+        topRow.Children.Add(rightColumn);
+
+        // Full width under both columns rather than stacked in the narrow right one, so twelve
+        // swatches fit in a row or two instead of a four-wide block three rows tall.
+        var presets = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
+
+        var root = new StackPanel();
+        root.Children.Add(topRow);
+        root.Children.Add(new Border { Height = 16 });
+        root.Children.Add(SectionLabel("Theme colors"));
+        root.Children.Add(presets);
 
         // ---- keeping every piece in sync ----
         var swatches = new List<(Border Swatch, string Name)>();
@@ -420,10 +538,10 @@ public partial class AppearanceView : Page
         {
             var swatch = new Border
             {
-                Width = 38,
-                Height = 38,
-                Margin = new Thickness(0, 0, 8, 8),
-                CornerRadius = new CornerRadius(19),
+                Width = 28,
+                Height = 28,
+                Margin = new Thickness(0, 0, 6, 6),
+                CornerRadius = new CornerRadius(14),
                 Background = new SolidColorBrush(theme.Base),
                 BorderBrush = Brushes.White,
                 BorderThickness = new Thickness(0),
