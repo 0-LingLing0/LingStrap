@@ -132,6 +132,7 @@ public static class LauncherService
             const int maxAttempts = 2;
             Process? process = null;
             var windowAppeared = false;
+            var handedOff = false;
 
             for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
@@ -168,6 +169,15 @@ public static class LauncherService
 
                 if (windowAppeared) break;
 
+                if (HandedOffToRunningClient(process))
+                {
+                    handedOff = true;
+                    Log.Info("Roblox handed this launch to the client that was already running - its own single-instance " +
+                             "behaviour (\"App NoReload\" in Roblox's log) - and exited cleanly. The user got the Roblox " +
+                             "they asked for, so this is a successful launch, not a crash.");
+                    break;
+                }
+
                 if (process.HasExited && attempt < maxAttempts)
                 {
                     Log.Warn("Roblox exited immediately after starting - likely closed and relaunched too quickly. Retrying once after a short delay.");
@@ -185,21 +195,25 @@ public static class LauncherService
             // leaving them nothing to fall back to and no way to tell Lingstrap to stop trying.
             // Keeping the old folder costs disk space until the next successful launch; losing it
             // costs the user their game.
-            if (windowAppeared)
+            // Deliberately NOT on a handoff: the client that took the launch is very likely running
+            // out of the old folder (that's why it was already open), and deleting a version folder
+            // from under a running Roblox breaks it mid-session. It gets removed on the next launch
+            // that genuinely opens its own window.
+            if (windowAppeared && oldVersionFolderToRemove != null)
             {
-                if (oldVersionFolderToRemove != null)
+                try
                 {
-                    try
-                    {
-                        Directory.Delete(oldVersionFolderToRemove, recursive: true);
-                        Log.Info($"Removed old Roblox version folder {oldVersionFolderToRemove}");
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Warn($"Could not remove old Roblox version folder {oldVersionFolderToRemove}: {ex.Message}");
-                    }
+                    Directory.Delete(oldVersionFolderToRemove, recursive: true);
+                    Log.Info($"Removed old Roblox version folder {oldVersionFolderToRemove}");
                 }
+                catch (Exception ex)
+                {
+                    Log.Warn($"Could not remove old Roblox version folder {oldVersionFolderToRemove}: {ex.Message}");
+                }
+            }
 
+            if (windowAppeared || handedOff)
+            {
                 // This version has now proven it runs, so stop holding it against it - otherwise a
                 // single bad launch would keep it pinned to an older Roblox indefinitely. Only
                 // clears when it's *this* version that succeeded: launching the older fallback
@@ -211,7 +225,7 @@ public static class LauncherService
                 }
             }
 
-            if (!windowAppeared)
+            if (!windowAppeared && !handedOff)
             {
                 // Process.Start succeeding only means Roblox's process itself came into existence -
                 // it can still crash moments later during its own startup (a corrupted install, a mod
@@ -356,6 +370,51 @@ public static class LauncherService
             ? Path.Combine(Paths.RobloxVersions, existingVersion)
             : null;
         return (newExe, oldVersionFolder);
+    }
+
+    /// <summary>
+    /// Roblox's own single-instance handoff, which is a SUCCESSFUL launch that looks exactly like a
+    /// startup crash from out here. A player process that finds a Roblox app already running tells
+    /// that one to come forward and then exits - cleanly, code 0, logging "App NoReload!" and
+    /// "local app is resuming" on its way out - instead of opening a second window of its own. The
+    /// user gets the Roblox they asked for; it just isn't the process we started. Without this
+    /// check, pressing Play while Roblox was already open reported "it likely crashed on startup"
+    /// twice over, marked a perfectly good version as failed, and skipped starting the companion
+    /// apps, Discord presence and overlays for a session that was in fact running.
+    ///
+    /// Exit code 0 alone isn't enough to conclude this - a clean exit with nothing else running is
+    /// still a failed launch - so this also requires another live client to hand off TO.
+    /// </summary>
+    private static bool HandedOffToRunningClient(Process process)
+    {
+        if (!process.HasExited) return false;
+
+        try
+        {
+            if (process.ExitCode != 0) return false;
+        }
+        catch
+        {
+            return false; // couldn't read it; treat as a normal failure rather than guessing
+        }
+
+        foreach (var other in Process.GetProcessesByName("RobloxPlayerBeta"))
+        {
+            try
+            {
+                if (other.Id != process.Id && !other.HasExited) return true;
+            }
+            catch
+            {
+                // Raced with it exiting - not the one we're looking for.
+            }
+            finally
+            {
+                other.Dispose();
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
