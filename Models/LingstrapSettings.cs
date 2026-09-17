@@ -109,6 +109,11 @@ public class LingstrapSettings
     /// launch check for updates instead of re-deriving this from disk every time.</summary>
     public string? InstalledRobloxVersion { get; set; }
 
+    /// <summary>A Roblox version that installed fine but then died during startup without ever
+    /// opening a window. Remembered so a launch doesn't reinstall and re-crash it every single time
+    /// while a working older install sits right next to it, unused.</summary>
+    public string? FailedRobloxVersion { get; set; }
+
     // --- Lingstrap updates -------------------------------------------------
     /// <summary>How Lingstrap handles a new release found on startup. Off: never checks. Notify:
     /// checks and shows what changed, letting the user choose to update. AutoInstall: checks and

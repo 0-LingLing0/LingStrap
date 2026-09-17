@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -160,19 +161,6 @@ public static class LauncherService
 
                 Log.Info($"Launched Roblox from {playerExe}" + (attempt > 1 ? $" (retry {attempt - 1})" : ""));
 
-                if (attempt == 1 && oldVersionFolderToRemove != null)
-                {
-                    try
-                    {
-                        Directory.Delete(oldVersionFolderToRemove, recursive: true);
-                        Log.Info($"Removed old Roblox version folder {oldVersionFolderToRemove}");
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Warn($"Could not remove old Roblox version folder {oldVersionFolderToRemove}: {ex.Message}");
-                    }
-                }
-
                 dialog.SetProgress(85);
                 dialog.SetStatus("Waiting for Roblox to open");
                 windowAppeared = await WaitForRobloxWindowAsync(process, () => cancelled, dialog);
@@ -191,6 +179,38 @@ public static class LauncherService
                 break;
             }
 
+            // Only now - a window actually appeared, so the new install demonstrably runs. Deleting
+            // it right after Process.Start returned (which is what this used to do) meant a new
+            // version that crashed on startup took the user's last working install down with it,
+            // leaving them nothing to fall back to and no way to tell Lingstrap to stop trying.
+            // Keeping the old folder costs disk space until the next successful launch; losing it
+            // costs the user their game.
+            if (windowAppeared)
+            {
+                if (oldVersionFolderToRemove != null)
+                {
+                    try
+                    {
+                        Directory.Delete(oldVersionFolderToRemove, recursive: true);
+                        Log.Info($"Removed old Roblox version folder {oldVersionFolderToRemove}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warn($"Could not remove old Roblox version folder {oldVersionFolderToRemove}: {ex.Message}");
+                    }
+                }
+
+                // This version has now proven it runs, so stop holding it against it - otherwise a
+                // single bad launch would keep it pinned to an older Roblox indefinitely. Only
+                // clears when it's *this* version that succeeded: launching the older fallback
+                // successfully says nothing about whether the newer one is still broken.
+                if (SettingsService.Current.FailedRobloxVersion == Path.GetFileName(versionFolder))
+                {
+                    SettingsService.Current.FailedRobloxVersion = null;
+                    SettingsService.Save();
+                }
+            }
+
             if (!windowAppeared)
             {
                 // Process.Start succeeding only means Roblox's process itself came into existence -
@@ -204,6 +224,11 @@ public static class LauncherService
                 if (process!.HasExited)
                 {
                     reason = "Roblox's process exited on its own before its window ever appeared, twice in a row (it likely crashed on startup).";
+                    LogCrashDiagnostics(process);
+
+                    var revertedTo = RememberLaunchFailure(versionFolder, oldVersionFolderToRemove);
+                    if (revertedTo != null)
+                        reason += $" Lingstrap has switched back to Roblox {revertedTo}, which is still installed - press Play again to use it.";
                 }
                 else
                 {
@@ -277,6 +302,18 @@ public static class LauncherService
         if (existingVersion == latestVersion)
             return (existingExe, null);
 
+        // This exact version already installed cleanly once and then died on startup. Installing it
+        // again would just reproduce that, every launch, forever - and the older install that still
+        // works is sitting right there. Use it instead until the user asks for a reinstall (which
+        // clears the marker) or Roblox ships a newer version than the broken one.
+        if (SettingsService.Current.FailedRobloxVersion == latestVersion
+            && existingExe != null && existingVersion != null)
+        {
+            Log.Warn($"Roblox {latestVersion} failed to start last time it was installed - launching {existingVersion}, " +
+                     "which still works, instead. Use \"Reinstall Roblox\" to try the newer one again.");
+            return (existingExe, null);
+        }
+
         Log.Info(existingVersion == null
             ? $"No Roblox install found - installing {latestVersion}."
             : $"Roblox install {existingVersion} is outdated - installing {latestVersion}.");
@@ -320,6 +357,130 @@ public static class LauncherService
             : null;
         return (newExe, oldVersionFolder);
     }
+
+    /// <summary>
+    /// Records that this version crashed on startup, and - if this launch was the first one after
+    /// upgrading onto it - points Lingstrap back at the previous install, which is still on disk
+    /// precisely because it's no longer deleted until a launch actually succeeds. Without the
+    /// revert, RobloxLocator keeps preferring InstalledRobloxVersion (set when the *install*
+    /// succeeded, not the launch), so every future launch would pick the broken version again and
+    /// the older working one would sit there untouched. Returns the version reverted to, or null if
+    /// there was nothing to go back to.
+    /// </summary>
+    private static string? RememberLaunchFailure(string versionFolder, string? oldVersionFolder)
+    {
+        try
+        {
+            var s = SettingsService.Current;
+            s.FailedRobloxVersion = Path.GetFileName(versionFolder);
+
+            string? revertedTo = null;
+            if (oldVersionFolder != null && Directory.Exists(oldVersionFolder))
+            {
+                revertedTo = Path.GetFileName(oldVersionFolder);
+                s.InstalledRobloxVersion = revertedTo;
+                Log.Warn($"Roblox {s.FailedRobloxVersion} wouldn't start, so Lingstrap has gone back to {revertedTo}, " +
+                         "which is still installed. It may be too old for Roblox to let you join games - " +
+                         "use \"Reinstall Roblox\" once the cause is sorted out.");
+            }
+            else
+            {
+                Log.Warn($"Roblox {s.FailedRobloxVersion} wouldn't start and there's no older install to fall back to.");
+            }
+
+            SettingsService.Save();
+            return revertedTo;
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"Could not record the failed Roblox launch: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// When Roblox dies during its own startup, "it crashed" on its own is not something anyone can
+    /// act on - not the user, and not us reading their log afterwards. Roblox's exit code names the
+    /// cause outright for the failures that actually happen here (0xC0000135 is a missing runtime
+    /// DLL, 0xC0000005 an access violation, 0xC0000142 a DLL that failed to initialise - typically
+    /// an injected overlay or anti-cheat), and Roblox writes its own log while starting up, whose
+    /// last lines say how far it got. Both go into our log so a pasted Lingstrap log is enough to
+    /// diagnose this without a round trip.
+    /// </summary>
+    private static void LogCrashDiagnostics(Process process)
+    {
+        try
+        {
+            var code = process.ExitCode;
+            Log.Error($"Roblox exit code: {code} (0x{unchecked((uint)code):X8}){DescribeExitCode(code)}");
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"Could not read Roblox's exit code: {ex.Message}");
+        }
+
+        try
+        {
+            if (!Directory.Exists(Paths.RobloxLogs))
+            {
+                Log.Warn($"No Roblox log directory at {Paths.RobloxLogs} - Roblox died before it wrote anything.");
+                return;
+            }
+
+            // Only a log this launch actually wrote. Taking the newest one unconditionally would,
+            // whenever Roblox died too early to log anything at all, quietly hand back a log from an
+            // earlier *successful* session - the most misleading possible output from something whose
+            // whole job is to say what went wrong. A few seconds of slack covers Roblox stamping the
+            // file slightly before our own StartTime reading.
+            DateTime since;
+            try { since = process.StartTime.ToUniversalTime().AddSeconds(-5); }
+            catch { since = DateTime.UtcNow.AddMinutes(-2); }
+
+            var newest = new DirectoryInfo(Paths.RobloxLogs).GetFiles("*.log")
+                .Where(f => f.LastWriteTimeUtc >= since)
+                .OrderByDescending(f => f.LastWriteTimeUtc)
+                .FirstOrDefault();
+
+            if (newest == null)
+            {
+                Log.Warn("Roblox wrote no log of its own for this launch - it died before it got that far, " +
+                         "which points at the process being stopped from outside (antivirus, anti-cheat) " +
+                         "rather than at anything in the install.");
+                return;
+            }
+
+            // Opened share-all: Roblox may still hold the handle even though the process is gone.
+            using var stream = new FileStream(newest.FullName, FileMode.Open, FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete);
+            using var reader = new StreamReader(stream);
+            var tail = reader.ReadToEnd()
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Select(l => l.TrimEnd('\r'))
+                .TakeLast(25)
+                .ToList();
+
+            Log.Error($"Last {tail.Count} line(s) of Roblox's own log ({newest.Name}):");
+            foreach (var line in tail) Log.Info($"  roblox| {line}");
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"Could not read Roblox's own log: {ex.Message}");
+        }
+    }
+
+    private static string DescribeExitCode(int code) => unchecked((uint)code) switch
+    {
+        // Worth calling out separately: this isn't a crash at all. Roblox decided to close, which
+        // looks identical from out here but has completely different causes - and sending someone
+        // hunting for a crash that never happened wastes everyone's time.
+        0 => " - that's a clean exit, not a crash: Roblox chose to close on its own.",
+        0xC0000135 => " - a required DLL is missing; the Visual C++ runtime is the usual one.",
+        0xC0000142 => " - a DLL failed to initialise, usually something injecting into Roblox (an overlay, anti-cheat or antivirus).",
+        0xC0000005 => " - access violation. If mods or cursors are on, turn them off and try again.",
+        0xC000007B => " - a DLL is the wrong architecture (32-bit where 64-bit was expected).",
+        0xC0000409 => " - stack buffer overrun, which anti-cheat also reports this way.",
+        _ => "",
+    };
 
     /// <summary>
     /// Polls for this specific launch's own window to appear, up to a generous timeout - Roblox is

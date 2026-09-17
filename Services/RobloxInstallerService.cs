@@ -30,10 +30,19 @@ public static class RobloxInstallerService
     /// </summary>
     public static bool DeleteCurrentInstall()
     {
-        var exe = RobloxLocator.FindPlayerExe();
-        if (exe == null) return false;
+        if (RobloxLocator.FindPlayerExe() == null) return false;
 
-        var versionFolder = Path.GetDirectoryName(exe)!;
+        // Every installed version, not just the one that would launch next. A failed upgrade leaves
+        // two folders behind (the new one that crashes on startup, and the older one kept as the
+        // fallback), and deleting only the latter would hand the next launch the broken install with
+        // nothing left to fall back to - the exact opposite of what asking for a reinstall means.
+        var versionFolders = Directory.Exists(Paths.RobloxVersions)
+            ? Directory.GetDirectories(Paths.RobloxVersions)
+                .Where(dir => File.Exists(Path.Combine(dir, "RobloxPlayerBeta.exe")))
+                .ToList()
+            : new List<string>();
+
+        if (versionFolders.Count == 0) return false;
 
         // Can't delete files a running client still has open.
         foreach (var proc in Process.GetProcessesByName("RobloxPlayerBeta"))
@@ -44,15 +53,24 @@ public static class RobloxInstallerService
 
         try
         {
-            Directory.Delete(versionFolder, recursive: true);
+            foreach (var folder in versionFolders)
+            {
+                Directory.Delete(folder, recursive: true);
+                Log.Info($"Deleted Roblox install at {folder} for a clean reinstall on the next launch.");
+            }
+
             SettingsService.Current.InstalledRobloxVersion = null;
+            // Asking for a reinstall is the user explicitly saying "try the newest one again", so a
+            // version parked earlier for crashing on startup gets another chance. Without this the
+            // marker would outlive the install it was about and permanently cap them to an older
+            // Roblox, with Reinstall silently doing nothing to change that.
+            SettingsService.Current.FailedRobloxVersion = null;
             SettingsService.Save();
-            Log.Info($"Deleted Roblox install at {versionFolder} for a clean reinstall on the next launch.");
             return true;
         }
         catch (Exception ex)
         {
-            Log.Error($"Could not delete Roblox install at {versionFolder}", ex);
+            Log.Error("Could not delete the Roblox install for a clean reinstall", ex);
             return false;
         }
     }
