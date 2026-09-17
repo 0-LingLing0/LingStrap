@@ -117,8 +117,11 @@ public partial class MainWindow : FluentWindow
 
     /// <summary>Silently checks GitHub once per launch per UpdateCheckMode: Off skips entirely,
     /// Notify shows the "update available" prompt every launch until it's actually installed (no
-    /// more one-time nag - LastSeenUpdateVersion no longer gates this), AutoInstall installs it with
-    /// no prompt. Either way, once a launch finds itself already on a version it hasn't announced yet
+    /// more one-time nag - LastSeenUpdateVersion no longer gates this). AutoInstall's own install
+    /// attempt already happened before this window was even created (see App.StartMainWindowAsync,
+    /// which reaches this window at all only when that attempt didn't end in a silent install) -
+    /// its result is reused from App.PendingUpdateResult instead of checking GitHub again here.
+    /// Either way, once a launch finds itself already on a version it hasn't announced yet
     /// (LastSeenUpdateVersion behind the current version) - the only way to reach that is having just
     /// installed silently via AutoInstall, since Notify's own prompt already records the version it
     /// showed - it shows a "what's new" notice instead, so a silent install still tells you what changed.</summary>
@@ -127,14 +130,17 @@ public partial class MainWindow : FluentWindow
         var mode = SettingsService.Current.UpdateMode;
         if (mode == UpdateCheckMode.Off) return;
 
-        var result = await UpdateCheckerService.CheckForUpdateAsync();
+        var result = App.PendingUpdateResult;
+        App.PendingUpdateResult = null; // never reused for a later re-check in this same process
+        result ??= await UpdateCheckerService.CheckForUpdateAsync();
 
         if (result.Status == UpdateCheckerService.UpdateStatus.UpdateAvailable)
         {
             if (mode == UpdateCheckMode.AutoInstall)
             {
-                if (result.SetupDownloadUrl != null && await UpdateCheckerService.DownloadAndLaunchSetupAsync(result.SetupDownloadUrl))
-                    Application.Current.Shutdown();
+                // Only reachable if the pre-window install attempt failed (e.g. the download broke
+                // partway through) - AutoInstall shows no UI by design, so there's nothing more to
+                // do here; it gets another silent attempt next launch.
                 return;
             }
 

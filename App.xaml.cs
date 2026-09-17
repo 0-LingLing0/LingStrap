@@ -189,6 +189,34 @@ public partial class App : Application
         try { ProtocolHandlerService.Register(); }
         catch (Exception ex) { Log.Warn($"Could not register protocol handler: {ex.Message}"); }
 
+        StartMainWindowAsync();
+    }
+
+    /// <summary>The result of an AutoInstall update check made here, before any window exists -
+    /// MainWindow's own startup check reuses it (see CheckForUpdateOnStartupAsync) instead of hitting
+    /// GitHub a second time, and clears it immediately after so a later re-check (reopened after
+    /// Roblox closes, or a manual "Check now") always does a fresh one instead of reusing a stale
+    /// result from however long ago this launch started.</summary>
+    internal static UpdateCheckerService.UpdateCheckResult? PendingUpdateResult { get; set; }
+
+    /// <summary>For UpdateCheckMode.AutoInstall, checks for and silently installs an update BEFORE
+    /// ever showing a window - otherwise the window flashes open just to immediately close again the
+    /// moment the installer takes over a moment later. Any other outcome (up to date, check failed,
+    /// download failed, or a different mode entirely) falls through to the normal window.</summary>
+    private async void StartMainWindowAsync()
+    {
+        if (SettingsService.Current.UpdateMode == Models.UpdateCheckMode.AutoInstall)
+        {
+            var result = await UpdateCheckerService.CheckForUpdateAsync();
+            if (result.Status == UpdateCheckerService.UpdateStatus.UpdateAvailable && result.SetupDownloadUrl != null
+                && await UpdateCheckerService.DownloadAndLaunchSetupAsync(result.SetupDownloadUrl))
+            {
+                Shutdown();
+                return;
+            }
+            PendingUpdateResult = result;
+        }
+
         var window = new MainWindow();
         window.Show();
     }
