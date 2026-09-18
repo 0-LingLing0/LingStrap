@@ -44,7 +44,18 @@ public partial class MainWindow : FluentWindow
         var startPage = App.WindowPositionOverride != null ? typeof(Views.AppearanceView) : typeof(Views.HomeView);
         Loaded += (_, _) => RootNavigation.Navigate(startPage);
         Loaded += (_, _) => StartBackgroundServices();
-        Loaded += async (_, _) => await CheckForUpdateOnStartupAsync();
+        Loaded += async (_, _) =>
+        {
+            // ContentDialogHost registers itself for this window when IT loads, which happens after
+            // this window's own Loaded handlers have run. The Notify path got away with that by
+            // accident: it awaits a real GitHub round trip first, so the host exists by the time it
+            // resumes. AutoInstall already has its result in hand (App.StartMainWindowAsync), awaits
+            // nothing, and so reached the dialog while the host was still null - which returns
+            // silently, and is why a silent update never announced itself. Yielding to ContextIdle
+            // lets the whole visual tree finish loading first, whichever path got us here.
+            await Dispatcher.InvokeAsync(() => { }, System.Windows.Threading.DispatcherPriority.ContextIdle);
+            await CheckForUpdateOnStartupAsync();
+        };
     }
 
     /// <summary>
@@ -144,18 +155,27 @@ public partial class MainWindow : FluentWindow
                 return;
             }
 
-            await UpdateDialogHelper.ShowAsync(this, result);
-            SettingsService.Current.LastSeenUpdateVersion = result.LatestVersion;
-            SettingsService.Save();
+            if (await UpdateDialogHelper.ShowAsync(this, result))
+            {
+                SettingsService.Current.LastSeenUpdateVersion = result.LatestVersion;
+                SettingsService.Save();
+            }
             return;
         }
 
         if (result.Status == UpdateCheckerService.UpdateStatus.UpToDate &&
             result.LatestVersion != null && result.LatestVersion != SettingsService.Current.LastSeenUpdateVersion)
         {
-            SettingsService.Current.LastSeenUpdateVersion = result.LatestVersion;
-            SettingsService.Save();
-            await UpdateDialogHelper.ShowWhatsNewAsync(this, result);
+            // Record it as seen only once it has ACTUALLY been shown. Marking it first meant a
+            // dialog that failed to appear still burned the notice permanently: the version now
+            // matched LastSeenUpdateVersion, so no later launch could ever show it either. This is
+            // the only chance the user gets to find out what a silent AutoInstall changed, so a
+            // failed attempt has to leave it pending rather than swallow it.
+            if (await UpdateDialogHelper.ShowWhatsNewAsync(this, result))
+            {
+                SettingsService.Current.LastSeenUpdateVersion = result.LatestVersion;
+                SettingsService.Save();
+            }
         }
     }
 
