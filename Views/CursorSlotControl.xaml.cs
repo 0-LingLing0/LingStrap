@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using Lingstrap.Models;
 using Lingstrap.Services;
 
@@ -20,6 +21,10 @@ public partial class CursorSlotControl : UserControl
     // statement in this constructor has run - without this, that spurious event would try to process
     // and read back a cursor slot that may not even have an image yet, and crash.
     private bool _loadingSlider = true;
+
+    // Set while a drag is in flight; committed by _scaleCommitTimer once it settles.
+    private int? _pendingPercent;
+    private DispatcherTimer? _scaleCommitTimer;
 
     public CursorSlotControl(CursorSlot slot, string title)
     {
@@ -99,14 +104,46 @@ public partial class CursorSlotControl : UserControl
         }
     }
 
+    /// <summary>
+    /// Dragging the slider raises one ValueChanged per tick - around 200 across a single drag. Doing
+    /// the real work on each of those re-encoded three PNGs, rewrote Settings.json and wrote six log
+    /// lines per tick, for ~600 throwaway images whose only lasting effect was the last one. This
+    /// waits for the drag to settle and then does it once. The label still updates on every tick, so
+    /// the slider stays live; it's only the writing that's deferred.
+    /// </summary>
     private void ScaleSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (_loadingSlider) return;
 
-        var percent = (int)Math.Round(e.NewValue);
-        var size = CursorImageService.SetScalePercent(_slot, percent);
-        RefreshThumbnail();
-        ScaleSizeText.Text = $"{size.Width} x {size.Height}";
+        _pendingPercent = (int)Math.Round(e.NewValue);
+        ScaleSizeText.Text = $"{_pendingPercent}%";
+
+        _scaleCommitTimer ??= CreateCommitTimer();
+        _scaleCommitTimer.Stop();
+        _scaleCommitTimer.Start();
+    }
+
+    private DispatcherTimer CreateCommitTimer()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            if (_pendingPercent is not { } percent) return;
+            _pendingPercent = null;
+
+            try
+            {
+                var size = CursorImageService.SetScalePercent(_slot, percent);
+                RefreshThumbnail();
+                ScaleSizeText.Text = $"{size.Width} x {size.Height}";
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Could not resize cursor slot {_slot} to {percent}%", ex);
+            }
+        };
+        return timer;
     }
 
     private void Clear_Click(object sender, RoutedEventArgs e)

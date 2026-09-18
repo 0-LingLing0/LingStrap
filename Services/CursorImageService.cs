@@ -230,7 +230,21 @@ public static class CursorImageService
                            ?? new CursorGeometry(new Size(FallbackSize, FallbackSize), new Rectangle(0, 0, FallbackSize, FallbackSize));
 
             var (targetWidth, targetHeight) = ComputeTargetSize(geometry, trimmedSource.Width, trimmedSource.Height, percent);
-            using var resizedContent = trimmedSource.Clone(x => x.Resize(targetWidth, targetHeight));
+
+            // Lanczos3 with premultiplied alpha, rather than the default resampler on straight RGBA.
+            // It matters most for exactly the images people pick for cursors: anything with a soft
+            // glow or feathered edge is mostly partial alpha, and resizing those channels
+            // independently of alpha drags the transparent pixels' colour into the visible edge -
+            // a glow loses its falloff and goes blocky as it shrinks. Premultiplying weights each
+            // pixel's colour by its own alpha first, so faint outer pixels stop polluting bright
+            // ones, and Lanczos keeps the falloff smooth instead of aliasing it into steps.
+            using var resizedContent = trimmedSource.Clone(x => x.Resize(new ResizeOptions
+            {
+                Size = new Size(targetWidth, targetHeight),
+                Mode = ResizeMode.Stretch,
+                Sampler = KnownResamplers.Lanczos3,
+                PremultiplyAlpha = true,
+            }));
 
             // Centered directly on the full canvas - simple and predictable: what you see in the
             // preview is exactly what gets written, with equal transparent margin on every side.
@@ -263,6 +277,27 @@ public static class CursorImageService
     /// is found (logged so it's clear why the 32x32 fallback was used).
     /// </summary>
     private static CursorGeometry? GetGeometry(string? versionFolder, string destinationRelativePath)
+    {
+        // A destination's geometry is a fixed property of Roblox's own shipped art - it cannot change
+        // while the app is open unless Roblox is reinstalled, and the cache key covers that. Reading
+        // it per call meant decoding the same reference PNG once per destination per slider tick:
+        // 1,322 file reads and 1,322 identical log lines from a single drag, which buried everything
+        // else in the log and made the slider do real disk work for a number it already knew.
+        var key = (versionFolder ?? "<none>") + "|" + destinationRelativePath;
+        if (GeometryCache.TryGetValue(key, out var cached)) return cached;
+
+        var geometry = ReadGeometryForDestination(versionFolder, destinationRelativePath);
+        GeometryCache[key] = geometry;
+        return geometry;
+    }
+
+    private static readonly Dictionary<string, CursorGeometry?> GeometryCache = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Drops the cached geometry - call when the files it was read from may have changed
+    /// (a slot cleared and its backup restored, or Roblox reinstalled under the same path).</summary>
+    public static void InvalidateGeometryCache() => GeometryCache.Clear();
+
+    private static CursorGeometry? ReadGeometryForDestination(string? versionFolder, string destinationRelativePath)
     {
         if (versionFolder == null)
         {
@@ -371,6 +406,10 @@ public static class CursorImageService
     /// <summary>Removes the picked image and processed files for this slot, and resets its size percentage back to the 100% default.</summary>
     public static void ClearSlot(CursorSlot slot)
     {
+        // Clearing restores Roblox's originals over the destinations, so anything cached from the
+        // files as they were a moment ago is no longer describing what's on disk.
+        InvalidateGeometryCache();
+
         var master = MasterPath(slot);
         if (File.Exists(master)) File.Delete(master);
 

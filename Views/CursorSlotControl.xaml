@@ -24,8 +24,13 @@
                        StrokeThickness="2" StrokeDashArray="4 3"
                        Stroke="{DynamicResource ControlStrokeColorDefaultBrush}" />
 
+            <!-- HighQuality, not NearestNeighbor: this box shows a 64x64 cursor at roughly double
+                 size, and nearest-neighbour turns every soft edge into visible blocks - which reads
+                 as "Lingstrap wrecked my image" for anything with a glow or antialiased edge, even
+                 though the written PNG is fine. Smooth scaling shows what Roblox will actually
+                 draw. -->
             <Image x:Name="PreviewImage" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"
-                   RenderOptions.BitmapScalingMode="NearestNeighbor" Visibility="Collapsed" />
+                   RenderOptions.BitmapScalingMode="HighQuality" Visibility="Collapsed" />
 
             <TextBlock x:Name="HintText" Text="Drop an image here" TextWrapping="Wrap"
                        TextAlignment="Center" FontSize="11" Margin="10"
