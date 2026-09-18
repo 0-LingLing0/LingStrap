@@ -14,10 +14,34 @@ public partial class GlobalSettingsView : Page
 
     private readonly List<(string Name, GbsFieldRow Row, Border? GroupHeader)> _searchableRows = new();
 
+    private bool _loadingLock = true;
+
     public GlobalSettingsView()
     {
         InitializeComponent();
+
+        // On if either says so: the setting is what Lingstrap re-applies each launch, but the file can
+        // also have been locked by hand or by another tool, and a toggle showing "off" over a file
+        // that's actually read-only would be lying about why edits in Roblox aren't sticking.
+        ChkLock.IsChecked = SettingsService.Current.LockGlobalSettings || GlobalBasicSettingsService.IsLocked();
+        _loadingLock = false;
+
         Load();
+    }
+
+    private async void Lock_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loadingLock) return;
+
+        var locked = ChkLock.IsChecked == true;
+        SettingsService.Current.LockGlobalSettings = locked;
+        SettingsService.Save();
+
+        if (!GlobalBasicSettingsService.ApplyLock(locked))
+        {
+            await DialogHelper.ShowErrorAsync(this,
+                $"Could not {(locked ? "lock" : "unlock")} the settings file - see the log for details.");
+        }
     }
 
     private void Load()

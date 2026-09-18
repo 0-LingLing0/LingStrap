@@ -2,6 +2,7 @@
       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
       xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      xmlns:v="clr-namespace:Lingstrap.Views"
       Title="Roblox Settings">
     <StackPanel Margin="28,24,28,28" MaxWidth="900" HorizontalAlignment="Left">
             <Grid Margin="0,0,0,20">
@@ -45,6 +46,16 @@
             </Border>
 
             <StackPanel x:Name="ContentPanel">
+                <!-- Above everything else on purpose: it changes what every setting below means. With
+                     it on, these are what Roblox gets every launch; with it off, they're a starting
+                     point Roblox is free to overwrite the moment you touch its own menu. -->
+                <Border Style="{StaticResource SettingsGroup}">
+                    <v:SettingRow Title="Lock these settings" ShowDivider="False"
+                                  Description="Makes the file read-only so Roblox can't overwrite it. Your FPS cap and everything below stay exactly as set here - but anything you change in Roblox's own settings menu won't be saved while this is on.">
+                        <ui:ToggleSwitch x:Name="ChkLock" Checked="Lock_Changed" Unchecked="Lock_Changed" />
+                    </v:SettingRow>
+                </Border>
+
                 <ui:TextBox x:Name="SearchBox" Width="300" HorizontalAlignment="Left" Margin="0,0,0,20"
                             PlaceholderText="Search settings by name" TextChanged="SearchBox_TextChanged" />
 

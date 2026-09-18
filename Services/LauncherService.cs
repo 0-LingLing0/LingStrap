@@ -83,6 +83,13 @@ public static class LauncherService
                 // Apply anything queued while a client was running - safe now, since this attempt
                 // hasn't started a new RobloxPlayerBeta process yet.
                 GlobalBasicSettingsService.FlushPending();
+
+                // Re-asserted every launch rather than trusted from when it was switched on: Roblox
+                // recreates the file (unlocked) if it's ever deleted, and anything else can clear the
+                // flag in between. Only ever applied here, never removed - a lock the user set up
+                // outside Lingstrap isn't Lingstrap's to take off just because this setting is off.
+                if (SettingsService.Current.LockGlobalSettings)
+                    GlobalBasicSettingsService.ApplyLock(true);
             });
 
             if (cancelled) return false;

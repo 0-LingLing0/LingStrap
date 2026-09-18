@@ -114,6 +114,10 @@ public class LingstrapSettings
     /// while a working older install sits right next to it, unused.</summary>
     public string? FailedRobloxVersion { get; set; }
 
+    /// <summary>Keeps GlobalBasicSettings_13.xml read-only so Roblox can't overwrite it on exit.
+    /// Re-applied every launch, since Roblox recreates the file if it's ever deleted.</summary>
+    public bool LockGlobalSettings { get; set; }
+
     // --- Lingstrap updates -------------------------------------------------
     /// <summary>How Lingstrap handles a new release found on startup. Off: never checks. Notify:
     /// checks and shows what changed, letting the user choose to update. AutoInstall: checks and

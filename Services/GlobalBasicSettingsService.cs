@@ -214,7 +214,10 @@ public static class GlobalBasicSettingsService
 
         try
         {
-            File.Copy(backupPath, FilePath, overwrite: true);
+            // File.Copy stamps the backup's (unlocked) attributes onto the destination, and throws
+            // outright onto a read-only one - WithWriteAccess covers both, re-locking afterwards if
+            // the file was locked before the restore.
+            WithWriteAccess(() => File.Copy(backupPath, FilePath, overwrite: true));
             Pending.Clear();
             Log.Info("Restored GlobalBasicSettings_13.xml from backup.");
         }
@@ -283,7 +286,7 @@ public static class GlobalBasicSettingsService
             if (existing != null) existing.Value = value;
             else props.Add(new XElement(tag, new XAttribute("name", name), value));
 
-            doc.Save(FilePath);
+            SaveDocument(doc);
             Log.Info($"Wrote GBS field {name} = {value}");
         }
         catch (Exception ex)
@@ -318,7 +321,7 @@ public static class GlobalBasicSettingsService
                     new XElement("X", xs), new XElement("Y", ys)));
             }
 
-            doc.Save(FilePath);
+            SaveDocument(doc);
             Log.Info($"Wrote GBS field {name} = ({xs}, {ys})");
         }
         catch (Exception ex)
@@ -341,7 +344,7 @@ public static class GlobalBasicSettingsService
             var set = new HashSet<string>(names);
             props.Elements().Where(e => (string?)e.Attribute("name") is { } n && set.Contains(n)).Remove();
 
-            doc.Save(FilePath);
+            SaveDocument(doc);
         }
         catch (Exception ex)
         {
@@ -353,6 +356,81 @@ public static class GlobalBasicSettingsService
     {
         var backupPath = FilePath + BackupSuffix;
         if (!File.Exists(backupPath) && File.Exists(FilePath))
+        {
             File.Copy(FilePath, backupPath);
+            // File.Copy carries the source's attributes across, so backing up a LOCKED file used to
+            // produce a read-only backup too - one that Restore could still read, but nothing could
+            // ever replace or delete afterwards. The backup is Lingstrap's, not a setting to protect.
+            SetReadOnly(backupPath, false);
+        }
     }
+
+    // --- Locking ------------------------------------------------------------------------------
+    //
+    // Roblox rewrites this whole file from its in-memory settings every time it exits. That's why an
+    // FPS cap set here "doesn't stick": change it, launch, touch any setting in Roblox's own menu (or
+    // just have Roblox's defaults differ), quit - and Roblox's copy overwrites Lingstrap's. Marking the
+    // file read-only is the standard way round it: Roblox still reads it on launch, it just can't save
+    // over it. The cost is deliberate and the page says so - nothing changed in Roblox's own menu
+    // persists while it's locked.
+
+    /// <summary>Whether the settings file is currently read-only on disk - the real state, not the
+    /// setting, since a lock can also be applied or removed outside Lingstrap.</summary>
+    public static bool IsLocked() =>
+        File.Exists(FilePath) && (File.GetAttributes(FilePath) & FileAttributes.ReadOnly) != 0;
+
+    /// <summary>Locks or unlocks the file. Returns false (and logs why) if it couldn't be done.</summary>
+    public static bool ApplyLock(bool locked)
+    {
+        if (!File.Exists(FilePath))
+        {
+            // Nothing to lock yet - Roblox creates this file on its first run. The launch path calls
+            // this again every time, so it takes effect as soon as the file exists.
+            if (locked) Log.Info("Lock requested for GlobalBasicSettings_13.xml, but it doesn't exist yet - will apply once Roblox creates it.");
+            return true; // deferred, not failed: the setting is saved and the next launch applies it
+        }
+
+        try
+        {
+            SetReadOnly(FilePath, locked);
+            Log.Info(locked
+                ? "Locked GlobalBasicSettings_13.xml (read-only) - Roblox can no longer overwrite these settings."
+                : "Unlocked GlobalBasicSettings_13.xml - Roblox can save its settings again.");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"Could not {(locked ? "lock" : "unlock")} GlobalBasicSettings_13.xml", ex);
+            return false;
+        }
+    }
+
+    private static void SetReadOnly(string path, bool readOnly)
+    {
+        var attributes = File.GetAttributes(path);
+        var updated = readOnly ? attributes | FileAttributes.ReadOnly : attributes & ~FileAttributes.ReadOnly;
+        if (updated != attributes) File.SetAttributes(path, updated);
+    }
+
+    /// <summary>
+    /// Every write Lingstrap makes to the settings file goes through here. A lock is meant to keep
+    /// ROBLOX out, not Lingstrap - so a change made on this page still lands even while the file is
+    /// read-only: the flag comes off for exactly the duration of the write and goes straight back on,
+    /// in a finally so a failed write can never leave a locked file quietly unlocked.
+    /// </summary>
+    private static void WithWriteAccess(Action write)
+    {
+        var wasLocked = IsLocked();
+        if (wasLocked) SetReadOnly(FilePath, false);
+        try
+        {
+            write();
+        }
+        finally
+        {
+            if (wasLocked && File.Exists(FilePath)) SetReadOnly(FilePath, true);
+        }
+    }
+
+    private static void SaveDocument(XDocument doc) => WithWriteAccess(() => doc.Save(FilePath));
 }
