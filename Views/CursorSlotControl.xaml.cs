@@ -115,8 +115,13 @@ public partial class CursorSlotControl : UserControl
     {
         if (_loadingSlider) return;
 
-        _pendingPercent = (int)Math.Round(e.NewValue);
-        ScaleSizeText.Text = $"{_pendingPercent}%";
+        var percent = (int)Math.Round(e.NewValue);
+        _pendingPercent = percent;
+
+        // The real pixel size, not the percentage - the slider position already shows the
+        // percentage, so the label's whole job is to say what it comes out as.
+        var previewSize = CursorImageService.PeekTargetSize(_slot, percent);
+        ScaleSizeText.Text = $"{previewSize.Width} x {previewSize.Height}";
 
         _scaleCommitTimer ??= CreateCommitTimer();
         _scaleCommitTimer.Stop();

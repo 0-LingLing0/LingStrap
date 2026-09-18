@@ -142,18 +142,51 @@ public static class CursorImageService
     /// those files by modified-time, simply opening the Mods page gave every one of them a fresh
     /// timestamp and made the next launch redo the whole restore-then-recopy it exists to skip.
     /// </summary>
-    public static (int Width, int Height) GetPrimaryTargetSize(CursorSlot slot)
+    public static (int Width, int Height) GetPrimaryTargetSize(CursorSlot slot) =>
+        PeekTargetSize(slot, GetScalePercent(slot));
+
+    /// <summary>
+    /// The pixel size the primary destination WOULD come out at for this percentage, worked out
+    /// without reading or writing anything. That's what lets the size label track the slider tick by
+    /// tick while the actual re-encode stays deferred to the end of the drag - the label can keep
+    /// saying "36 x 36" instead of falling back to a percentage the user can already see.
+    /// </summary>
+    public static (int Width, int Height) PeekTargetSize(CursorSlot slot, int percent)
     {
         if (!HasSlot(slot)) return default;
 
-        using var master = Image.Load<Rgba32>(MasterPath(slot));
-        using var trimmedSource = master.Clone(x => x.Crop(FindOpaqueBounds(master)));
+        var (sourceWidth, sourceHeight) = GetTrimmedSourceSize(slot);
+        if (sourceWidth <= 0 || sourceHeight <= 0) return default;
 
         var primary = Destinations(slot)[0];
         var geometry = GetGeometry(RobloxLocator.FindVersionFolder(), primary)
                        ?? new CursorGeometry(new Size(FallbackSize, FallbackSize), new Rectangle(0, 0, FallbackSize, FallbackSize));
 
-        return ComputeTargetSize(geometry, trimmedSource.Width, trimmedSource.Height, GetScalePercent(slot));
+        return ComputeTargetSize(geometry, sourceWidth, sourceHeight, percent);
+    }
+
+    private static readonly Dictionary<CursorSlot, (int Width, int Height)> TrimmedSourceSizes = new();
+
+    /// <summary>The picked image's opaque content size, cached - it only changes when the slot's
+    /// image does, and decoding the master PNG on every slider tick just to re-measure it is the
+    /// kind of per-tick disk work this whole path was just cleaned up to avoid.</summary>
+    private static (int Width, int Height) GetTrimmedSourceSize(CursorSlot slot)
+    {
+        if (TrimmedSourceSizes.TryGetValue(slot, out var cached)) return cached;
+
+        try
+        {
+            using var master = Image.Load<Rgba32>(MasterPath(slot));
+            var bounds = FindOpaqueBounds(master);
+            var size = (bounds.Width, bounds.Height);
+            TrimmedSourceSizes[slot] = size;
+            return size;
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"Could not measure cursor source for slot {slot}: {ex.Message}");
+            return default;
+        }
     }
 
     /// <summary>
@@ -197,6 +230,7 @@ public static class CursorImageService
 
         using var master = Image.Load<Rgba32>(sourceFilePath);
         master.SaveAsPng(MasterPath(slot));
+        TrimmedSourceSizes.Remove(slot); // different image, different content size
 
         var percent = GetScalePercent(slot);
         var size = ProcessAll(slot, master, percent);
@@ -409,6 +443,7 @@ public static class CursorImageService
         // Clearing restores Roblox's originals over the destinations, so anything cached from the
         // files as they were a moment ago is no longer describing what's on disk.
         InvalidateGeometryCache();
+        TrimmedSourceSizes.Remove(slot);
 
         var master = MasterPath(slot);
         if (File.Exists(master)) File.Delete(master);
