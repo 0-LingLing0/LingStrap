@@ -29,10 +29,13 @@ public partial class OverlayBannerWindow : Window
         [DllImport("user32.dll")] public static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
         [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint uFlags);
         [DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
+        [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     }
 
     private readonly IntPtr _robloxHwnd;
     private System.Windows.Threading.DispatcherTimer? _followTimer;
+    private Rect? _lastRobloxRect;
+    private bool _wasRobloxForeground;
 
     public OverlayBannerWindow(IntPtr robloxHwnd)
     {
@@ -56,12 +59,30 @@ public partial class OverlayBannerWindow : Window
             // insert after whatever window currently sits just above Roblox in the z-order. If
             // nothing is above it, GetWindow returns IntPtr.Zero, which doubles as the HWND_TOP
             // constant - so this naturally puts the banner at the very top of the z-order in that case.
-            if (_robloxHwnd != IntPtr.Zero)
-            {
-                var insertAfter = Native.GetWindow(_robloxHwnd, GW_HWNDPREV);
-                Native.SetWindowPos(hwnd, insertAfter, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-            }
+            PlaceAboveRoblox();
         };
+    }
+
+    /// <summary>
+    /// Puts this window directly above Roblox in the z-order. Must be re-asserted, not done once:
+    /// Roblox coming to the foreground, finishing its load, or going (borderless) fullscreen all
+    /// bump it back above this window, and a join - the exact moment this banner appears - is when
+    /// Roblox is doing all three. Setting it from SourceInitialized alone was never enough either,
+    /// because that runs before the window is visible and ShowActivated="False" means showing it
+    /// doesn't raise it afterwards. DxFpsOverlayWindow has always re-asserted this on every change,
+    /// which is why the FPS chip shows on machines where this banner silently never did.
+    /// </summary>
+    private void PlaceAboveRoblox()
+    {
+        if (_robloxHwnd == IntPtr.Zero) return;
+
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero) return;
+
+        // GetWindow returns the window sitting immediately ABOVE Roblox; inserting after it lands
+        // this one between the two. Nothing above Roblox gives IntPtr.Zero, which is also HWND_TOP.
+        var insertAfter = Native.GetWindow(_robloxHwnd, GW_HWNDPREV);
+        Native.SetWindowPos(hwnd, insertAfter, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     }
 
     /// <summary>Builds and shows the overlay over the Roblox client that actually joined, or does nothing if there's no location or the window can't be found.</summary>
@@ -89,9 +110,16 @@ public partial class OverlayBannerWindow : Window
                           $"({overlay.Left.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)}," +
                           $"{overlay.Top.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture)}) {overlay.Width}x{overlay.Height}.");
         overlay.Show();
+
+        // Again now that it actually has a visible window - see PlaceAboveRoblox.
+        overlay.PlaceAboveRoblox();
+
         overlay.Animate();
         overlay.StartFollowing();
-        Services.Log.Info("Overlay banner Show() returned.");
+
+        Services.Log.Info($"Overlay banner shown: visible={overlay.IsVisible} " +
+                          $"size={overlay.ActualWidth:0.#}x{overlay.ActualHeight:0.#} " +
+                          $"roblox=0x{robloxHwnd.ToInt64():X}");
     }
 
     /// <summary>Pins the banner centred just below Roblox's top edge, given its current client rect.</summary>
@@ -114,8 +142,17 @@ public partial class OverlayBannerWindow : Window
         };
         _followTimer.Tick += (_, _) =>
         {
-            if (Services.RobloxWindowLocator.GetClientRectQuiet(_robloxHwnd) is { } rect)
-                Reposition(rect);
+            if (Services.RobloxWindowLocator.GetClientRectQuiet(_robloxHwnd) is not { } rect) return;
+
+            // Only when something actually changed: SetWindowPos on every one of these ticks would
+            // be 60 z-order changes a second for the whole time the banner is up.
+            var isForeground = Native.GetForegroundWindow() == _robloxHwnd;
+            if (_lastRobloxRect is not { } last || last != rect || isForeground != _wasRobloxForeground)
+                PlaceAboveRoblox();
+
+            _lastRobloxRect = rect;
+            _wasRobloxForeground = isForeground;
+            Reposition(rect);
         };
         _followTimer.Start();
     }
