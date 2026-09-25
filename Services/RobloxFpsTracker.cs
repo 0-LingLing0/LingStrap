@@ -29,31 +29,23 @@ public sealed class RobloxFpsTracker : IDisposable
     // it from a real capture.
     private const string PresentEventName = "Present/Start";
 
-    // How often the count is actually reported. 16ms is roughly a 60Hz display's own refresh
-    // interval - updating meaningfully faster than the monitor can actually show a new image is
-    // pure wasted work with zero visible benefit, so this is close to the practical ceiling for
-    // "faster" to actually mean anything.
-    private static readonly TimeSpan ReportInterval = TimeSpan.FromMilliseconds(16);
+    // How often the count is actually reported, and so how often the overlay redraws. This was 16ms
+    // - 60 updates a second - on the reasoning that a 60Hz display can show that many. It can, but
+    // nobody can READ them: a frame-rate number changing 60 times a second is an unreadable blur,
+    // and every one of those updates costs a full Direct2D redraw plus an UpdateLayeredWindow blit
+    // over the running game. Four a second is what RTSS and Steam's own counters settle on, it's
+    // legible, and it does roughly a twelfth of the drawing work.
+    private static readonly TimeSpan ReportInterval = TimeSpan.FromMilliseconds(250);
 
-    // How far back "the current FPS" looks. Shorter than the standard 1-second window most FPS
-    // counters use, again for faster reaction to an actual change - the count is normalized by the
-    // window's real elapsed span (not assumed to be exactly this), so shortening it doesn't throw
-    // off the math, just trades some smoothness for responsiveness.
-    private static readonly TimeSpan WindowSize = TimeSpan.FromMilliseconds(200);
-
-    // Every distinct event name containing "Present" gets its own running count, dumped to the log
-    // every 2 seconds as an occurrences-per-second rate. Whichever one's rate actually matches
-    // Roblox's own on-screen FPS counter (Shift+F5) is the real one-per-frame event - this turns
-    // "guess an event name, ship it, wait for someone to test with a real game running" into reading
-    // one log file, since PresentEventName above has already needed correcting once.
-    private static readonly TimeSpan DiagnosticInterval = TimeSpan.FromSeconds(2);
+    // How far back "the current FPS" looks. Widened along with the report interval above: at four
+    // updates a second there's no responsiveness left to win from a 200ms window, and a longer one
+    // averages out the single-frame spikes that made the number jitter. The count is normalized by
+    // the window's real elapsed span rather than assumed to equal this exactly.
+    private static readonly TimeSpan WindowSize = TimeSpan.FromMilliseconds(500);
 
     private readonly int _targetProcessId;
     private readonly object _lock = new();
-    private readonly HashSet<string> _seenEventNames = new();
-    private readonly Dictionary<string, int> _presentLikeCounts = new();
     private readonly Queue<DateTime> _presentTimes = new();
-    private DateTime? _diagnosticWindowStart;
     private TraceEventSession? _session;
     private Task? _processingTask;
 
@@ -89,12 +81,21 @@ public sealed class RobloxFpsTracker : IDisposable
         });
     }
 
+    /// <summary>
+    /// Runs for EVERY DXGI event on the machine, from every process - thousands a second while any
+    /// game is rendering. Everything here is multiplied by that rate, so the two cheapest
+    /// discriminators come first and nothing whatsoever happens above them.
+    ///
+    /// This used to, on every single event: take a lock to record whether it had seen that event
+    /// name before, run a case-insensitive substring scan for "Present", take a second lock to keep
+    /// per-name counters, and convert the timestamp - all before the one comparison that rejects
+    /// the ~99% of events it doesn't want. That work was the FPS overlay's own cost to the frame
+    /// rate it was measuring.
+    /// </summary>
     private void OnEvent(TraceEvent data)
     {
         if (data.ProcessID != _targetProcessId) return;
-
-        var name = data.EventName;
-        if (name == null) return;
+        if (data.EventName != PresentEventName) return;
 
         // The event's OWN timestamp (when it actually happened), not DateTime.UtcNow (when this
         // callback happens to run). A real-time ETW session delivers events in periodic buffered
@@ -105,17 +106,6 @@ public sealed class RobloxFpsTracker : IDisposable
         // a gap until the next flush that looks like one huge delta. TimeStamp sidesteps that
         // entirely since it's stamped by the OS at the moment the event actually happened.
         var eventTime = data.TimeStamp;
-
-        lock (_seenEventNames)
-        {
-            if (_seenEventNames.Add(name))
-                Log.Info($"FPS overlay: saw DXGI event \"{name}\" for pid {_targetProcessId}.");
-        }
-
-        if (name.Contains("Present", StringComparison.OrdinalIgnoreCase))
-            TrackDiagnosticRate(name, eventTime);
-
-        if (name != PresentEventName) return;
 
         double? toReport = null;
         lock (_lock)
@@ -145,33 +135,6 @@ public sealed class RobloxFpsTracker : IDisposable
 
         if (toReport is { } fps)
             FpsUpdated?.Invoke(fps);
-    }
-
-    /// <summary>Logs occurrences-per-second for every "Present"-ish event name every 2 seconds, so a
-    /// live capture directly shows which one actually fires once per real frame instead of needing
-    /// another guess to be shipped and tested. Bucketed by the events' own timestamps, same reasoning
-    /// as OnEvent above - otherwise this would show the same delivery-burst artifacts that made the
-    /// very capture used to pick PresentEventName look unstable in the first place.</summary>
-    private void TrackDiagnosticRate(string name, DateTime eventTime)
-    {
-        List<(string Name, int Count)>? toLog = null;
-        double elapsedSeconds = 0;
-
-        lock (_presentLikeCounts)
-        {
-            _presentLikeCounts[name] = _presentLikeCounts.GetValueOrDefault(name) + 1;
-            _diagnosticWindowStart ??= eventTime;
-
-            elapsedSeconds = (eventTime - _diagnosticWindowStart.Value).TotalSeconds;
-            if (elapsedSeconds < DiagnosticInterval.TotalSeconds) return;
-
-            toLog = _presentLikeCounts.Select(kv => (kv.Key, kv.Value)).OrderByDescending(x => x.Value).ToList();
-            _presentLikeCounts.Clear();
-            _diagnosticWindowStart = eventTime;
-        }
-
-        var summary = string.Join(", ", toLog.Select(x => $"{x.Name}={Math.Round(x.Count / elapsedSeconds, 1)}/s"));
-        Log.Info($"FPS overlay: present-like event rates over {elapsedSeconds:0.#}s - {summary}");
     }
 
     public void Stop()

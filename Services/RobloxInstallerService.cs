@@ -122,20 +122,82 @@ public static class RobloxInstallerService
     /// the launch fall back to whatever's already installed, instead of stalling the entire launch
     /// for minutes on just the update check.
     /// </summary>
+    /// <summary>
+    /// How long a version answer stays good enough to reuse. Every launch used to wait on Roblox's
+    /// version API before doing anything else, and that API is regularly slow - seven seconds in one
+    /// measured launch here, and Roblox's own logs show it taking five and twenty-one seconds for
+    /// other endpoints. That wait sat in front of writing flags, applying mods and starting the game,
+    /// so it was the single largest avoidable part of "waiting for Roblox".
+    ///
+    /// Roblox ships a new client roughly weekly, so an answer from half an hour ago is almost always
+    /// still correct. When it isn't, the cost is one launch on a client Roblox won't let you join
+    /// with - so a failed launch clears this (see InvalidateVersionCache), and the retry checks for
+    /// real rather than trusting the same stale answer again.
+    /// </summary>
+    private static readonly TimeSpan VersionCacheLifetime = TimeSpan.FromMinutes(30);
+
     public static async Task<string?> GetLatestVersionAsync()
     {
+        var settings = SettingsService.Current;
+
+        // Normalised rather than trusted: whether a round-tripped timestamp comes back as Utc, Local
+        // or Unspecified is up to the serialiser, and getting it wrong here doesn't fail loudly - it
+        // just makes every cached answer look hours old (by exactly the machine's UTC offset), so the
+        // cache silently never engages and the slow path runs forever.
+        var checkedUtc = settings.LastRobloxVersionCheckedUtc.Kind switch
+        {
+            DateTimeKind.Utc => settings.LastRobloxVersionCheckedUtc,
+            DateTimeKind.Local => settings.LastRobloxVersionCheckedUtc.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(settings.LastRobloxVersionCheckedUtc, DateTimeKind.Utc),
+        };
+        var age = DateTime.UtcNow - checkedUtc;
+
+        if (!string.IsNullOrEmpty(settings.LastRobloxVersionSeen) && age >= TimeSpan.Zero && age < VersionCacheLifetime)
+        {
+            Log.Info($"Roblox version: reusing {settings.LastRobloxVersionSeen} checked {age.TotalMinutes:0} min ago " +
+                     "- skipping the version API call.");
+            return settings.LastRobloxVersionSeen;
+        }
+
+        var stopwatch = Stopwatch.StartNew();
         try
         {
             using var cts = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(8));
             var json = await Http.GetStringAsync("https://clientsettings.roblox.com/v2/client-version/WindowsPlayer", cts.Token);
             using var doc = JsonDocument.Parse(json);
-            return doc.RootElement.GetProperty("clientVersionUpload").GetString();
+            var version = doc.RootElement.GetProperty("clientVersionUpload").GetString();
+
+            // Logged with its duration because this call is invisible otherwise: the seven seconds it
+            // cost showed up only as an unexplained gap between two unrelated log lines.
+            Log.Info($"Roblox version: {version} (API took {stopwatch.ElapsedMilliseconds} ms).");
+
+            if (!string.IsNullOrEmpty(version))
+            {
+                settings.LastRobloxVersionSeen = version;
+                settings.LastRobloxVersionCheckedUtc = DateTime.UtcNow;
+                SettingsService.Save();
+            }
+
+            return version;
         }
         catch (Exception ex)
         {
-            Log.Warn($"Could not check the latest Roblox version: {ex.Message}");
+            Log.Warn($"Could not check the latest Roblox version after {stopwatch.ElapsedMilliseconds} ms: {ex.Message}");
             return null;
         }
+    }
+
+    /// <summary>Forgets the cached version so the next launch asks Roblox for real. Called when a
+    /// launch fails, since "the client is out of date" is one of the reasons that can happen and is
+    /// exactly the case a stale cache would otherwise keep reproducing.</summary>
+    public static void InvalidateVersionCache()
+    {
+        if (string.IsNullOrEmpty(SettingsService.Current.LastRobloxVersionSeen)) return;
+
+        SettingsService.Current.LastRobloxVersionSeen = null;
+        SettingsService.Current.LastRobloxVersionCheckedUtc = default;
+        SettingsService.Save();
+        Log.Info("Cleared the cached Roblox version - the next launch will check for real.");
     }
 
     /// <summary>

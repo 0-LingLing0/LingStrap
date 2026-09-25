@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace Lingstrap.Models;
@@ -117,6 +118,12 @@ public class LingstrapSettings
     /// <summary>Keeps GlobalBasicSettings_13.xml read-only so Roblox can't overwrite it on exit.
     /// Re-applied every launch, since Roblox recreates the file if it's ever deleted.</summary>
     public bool LockGlobalSettings { get; set; }
+
+    /// <summary>The newest Roblox version Roblox's own API reported, and when. Lets a launch reuse a
+    /// recent answer instead of waiting on that API every single time - it is frequently slow, and
+    /// the wait is in front of everything else the launch does.</summary>
+    public string? LastRobloxVersionSeen { get; set; }
+    public DateTime LastRobloxVersionCheckedUtc { get; set; }
 
     // --- Lingstrap updates -------------------------------------------------
     /// <summary>How Lingstrap handles a new release found on startup. Off: never checks. Notify:

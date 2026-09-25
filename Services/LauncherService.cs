@@ -57,11 +57,24 @@ public static class LauncherService
             // actual download turns out to be needed, EnsureInstalledAsync's own byte-accurate
             // progress takes over for that stretch instead (it dominates total launch time whenever
             // it happens), and the stage percentages simply resume once it's done.
+            // Per-stage timing, because "the launch feels slow" is unanswerable without it: the
+            // version check quietly cost seven seconds and showed up only as an unexplained gap
+            // between two unrelated log lines. Every stage now states its own cost.
+            var launchTimer = Stopwatch.StartNew();
+            var previousStageMs = 0L;
+            void Stage(string name)
+            {
+                var elapsed = launchTimer.ElapsedMilliseconds;
+                Log.Info($"Launch timing: {name} took {elapsed - previousStageMs} ms (total {elapsed} ms).");
+                previousStageMs = elapsed;
+            }
+
             dialog.SetProgress(5);
             dialog.SetStatus("Checking for updates");
 
             var (playerExe, oldVersionFolderToRemove) = await EnsureInstalledAsync(dialog, installCts.Token);
             if (playerExe is null) return false; // EnsureInstalledAsync already reported why
+            Stage("version check / install");
 
             if (cancelled) return false;
 
@@ -91,6 +104,7 @@ public static class LauncherService
                 if (SettingsService.Current.LockGlobalSettings)
                     GlobalBasicSettingsService.ApplyLock(true);
             });
+            Stage("FastFlags and settings");
 
             if (cancelled) return false;
 
@@ -123,6 +137,7 @@ public static class LauncherService
                     GpuPreferenceService.Apply(playerExe);
                 }
             });
+            Stage("mods, multi-instance and GPU preference");
 
             if (cancelled) return false;
 
@@ -168,10 +183,12 @@ public static class LauncherService
                 WireDiscordExit(process);
 
                 Log.Info($"Launched Roblox from {playerExe}" + (attempt > 1 ? $" (retry {attempt - 1})" : ""));
+                Stage("starting Roblox's process");
 
                 dialog.SetProgress(85);
                 dialog.SetStatus("Waiting for Roblox to open");
                 windowAppeared = await WaitForRobloxWindowAsync(process, () => cancelled, dialog);
+                Stage("waiting for Roblox's own window (Roblox's startup, not Lingstrap's)");
                 if (cancelled) return false;
 
                 if (windowAppeared) break;
@@ -246,6 +263,11 @@ public static class LauncherService
                 {
                     reason = "Roblox's process exited on its own before its window ever appeared, twice in a row (it likely crashed on startup).";
                     LogCrashDiagnostics(process);
+
+                    // An out-of-date client is one of the reasons Roblox refuses to start properly,
+                    // and a cached version answer is what could have left us on one - so don't let
+                    // the next attempt trust that same answer.
+                    RobloxInstallerService.InvalidateVersionCache();
 
                     var revertedTo = RememberLaunchFailure(versionFolder, oldVersionFolderToRemove);
                     if (revertedTo != null)
