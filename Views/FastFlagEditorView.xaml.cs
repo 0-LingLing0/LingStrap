@@ -260,7 +260,30 @@ public partial class FastFlagEditorView : Page
         var file = Path.Combine(versionFolder, "ClientSettings", "ClientAppSettings.json");
         if (!File.Exists(file)) return;
 
-        Process.Start(new ProcessStartInfo { FileName = file, UseShellExecute = true });
+        // Opening it "with the default app" throws when nothing is associated with .json, which is
+        // the norm on a Windows install without a code editor - and this handler had no guard, so
+        // Lingstrap crashed instead of opening the file. Notepad is always there as a fallback, and
+        // failing that, the folder itself.
+        try
+        {
+            Process.Start(new ProcessStartInfo { FileName = file, UseShellExecute = true });
+            return;
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            // No association - fall through.
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo { FileName = "notepad.exe", ArgumentList = { file }, UseShellExecute = false });
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"Could not open {file}: {ex.Message}");
+            try { Process.Start(new ProcessStartInfo { FileName = "explorer.exe", Arguments = $"/select,\"{file}\"" }); }
+            catch { /* nothing left to try */ }
+        }
     }
 
     private void BackToFastFlags_Click(object sender, RoutedEventArgs e)
