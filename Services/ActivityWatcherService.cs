@@ -145,13 +145,17 @@ public static class ActivityWatcherService
             fs.Seek(state.Position, SeekOrigin.Begin);
             var buffer = new byte[fs.Length - state.Position];
             var read = fs.Read(buffer, 0, buffer.Length);
-            var text = Encoding.UTF8.GetString(buffer, 0, read);
+            if (read <= 0) return; // shrank between the length check and the read
 
-            var lastNewline = text.LastIndexOf('\n');
+            // Found in the raw bytes, not the decoded text. The position used to advance by
+            // re-encoding the decoded text, which only round-trips for valid UTF-8: one invalid byte
+            // in a line decodes to U+FFFD, which re-encodes as three, so the position overshot and the
+            // next read began partway into a line - enough to miss the join line that followed it.
+            var lastNewline = Array.LastIndexOf(buffer, (byte)'\n', read - 1);
             if (lastNewline < 0) return; // no complete line yet, wait for more
 
-            var complete = text[..(lastNewline + 1)];
-            state.Position += Encoding.UTF8.GetByteCount(complete);
+            var complete = Encoding.UTF8.GetString(buffer, 0, lastNewline + 1);
+            state.Position += lastNewline + 1;
 
             foreach (var line in complete.Split('\n', StringSplitOptions.RemoveEmptyEntries))
             {
