@@ -186,7 +186,37 @@ public partial class CursorSlotControl : UserControl
 
     private void RefreshThumbnail()
     {
-        var bytes = File.ReadAllBytes(CursorImageService.PreviewPath(_slot));
+        // HasSlot checks the picked (master) image, but the preview is the PROCESSED copy - a
+        // different file. SetSlot saves the master first and processes it second, so a failed
+        // processing step leaves a master with no preview. Reading that unguarded threw from this
+        // control's constructor, which crashed Lingstrap every time the Mods page was opened - for
+        // good, until someone found and deleted the file by hand. Rebuild it from the master instead.
+        var path = CursorImageService.PreviewPath(_slot);
+        if (!File.Exists(path))
+        {
+            try
+            {
+                CursorImageService.SetScalePercent(_slot, CursorImageService.GetScalePercent(_slot));
+                Log.Info($"Cursor slot {_slot}: preview was missing - rebuilt it from the picked image.");
+            }
+            catch (Exception ex)
+            {
+                Log.Warn($"Cursor slot {_slot}: preview missing and could not be rebuilt: {ex.Message}");
+            }
+        }
+
+        byte[] bytes;
+        try
+        {
+            bytes = File.ReadAllBytes(path);
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"Cursor slot {_slot}: could not show its preview: {ex.Message}");
+            PreviewImage.Source = null;
+            return;
+        }
+
         var bmp = new BitmapImage();
         bmp.BeginInit();
         bmp.CacheOption = BitmapCacheOption.OnLoad;
