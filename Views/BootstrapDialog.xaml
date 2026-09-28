@@ -2,30 +2,29 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-        Title="Lingstrap" Width="580" Height="220"
+        Title="Lingstrap" Width="580" Height="196"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         ResizeMode="NoResize" ShowInTaskbar="False" Topmost="True"
         WindowStartupLocation="Manual">
-    <!-- Most colours here are fixed literals matched to the app's dark palette - only the progress
-         bar fill, stripes, glows and accent bar (built in code-behind) follow the chosen accent. -->
+    <!--
+        The card had four decorations running at once (two animated diagonal stripe layers, a pulsing
+        halo, a shimmer) over a layout whose content all started at x=142, leaving a dead band across
+        the top left. Stripping all of it left something informative but lifeless, so the motion is
+        back - just motion with depth rather than a scrolling pattern: two accent auroras drifting
+        slowly at different speeds and directions behind a tighter card, and a halo breathing behind
+        the logo. Height came down from 220 so the content fills the card instead of floating in it.
+    -->
     <Window.Resources>
         <Style x:Key="CloseButtonStyle" TargetType="Button">
-            <Setter Property="Foreground" Value="#FFA8AFBE" />
+            <Setter Property="Foreground" Value="#FF8A92A2" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="FontSize" Value="13" />
             <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
-            <Setter Property="RenderTransform">
-                <Setter.Value>
-                    <ScaleTransform ScaleX="1" ScaleY="1" />
-                </Setter.Value>
-            </Setter>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="{TemplateBinding Background}" Width="30" Height="30" CornerRadius="15">
-                            <TextBlock Text="&#xE711;" FontFamily="Segoe MDL2 Assets" FontSize="12"
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" Width="26" Height="26" CornerRadius="13">
+                            <TextBlock Text="&#xE711;" FontFamily="Segoe MDL2 Assets" FontSize="11"
                                        Foreground="{TemplateBinding Foreground}"
                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
                         </Border>
@@ -33,115 +32,167 @@
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter Property="Foreground" Value="White" />
                                 <Setter TargetName="Bd" Property="Background" Value="#1AFFFFFF" />
-                                <Setter Property="RenderTransform">
-                                    <Setter.Value>
-                                        <ScaleTransform ScaleX="1.12" ScaleY="1.12" />
-                                    </Setter.Value>
-                                </Setter>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style x:Key="StepDotStyle" TargetType="Ellipse">
+            <Setter Property="Width" Value="6" />
+            <Setter Property="Height" Value="6" />
+            <Setter Property="Margin" Value="0,0,6,0" />
+            <Setter Property="Fill" Value="#26FFFFFF" />
+        </Style>
     </Window.Resources>
 
-    <Border x:Name="RootBorder" CornerRadius="20" MouseLeftButtonDown="RootBorder_MouseLeftButtonDown">
+    <Border x:Name="RootBorder" CornerRadius="18" MouseLeftButtonDown="RootBorder_MouseLeftButtonDown">
         <Border.Effect>
-            <DropShadowEffect x:Name="AmbientShadow" Color="Black" BlurRadius="36" ShadowDepth="10" Opacity="0.5" Direction="270" />
+            <DropShadowEffect x:Name="AmbientShadow" Color="Black" BlurRadius="40" ShadowDepth="12" Opacity="0.55" Direction="270" />
         </Border.Effect>
-        <!-- ClipToBounds only clips to the rectangular layout box, not the rounded shape CornerRadius
-             paints - without this explicit rounded clip, content (the animated diagonal stripes)
-             pokes past the rounded background right in the corners, where the background's own
-             rounded fill has already curved inward but a plain rectangular clip hasn't. -->
         <Border.Clip>
-            <RectangleGeometry Rect="0,0,580,220" RadiusX="20" RadiusY="20" />
+            <RectangleGeometry Rect="0,0,580,196" RadiusX="18" RadiusY="18" />
         </Border.Clip>
 
         <Grid>
-            <!-- Base vertical gradient -->
-            <Border CornerRadius="20">
+            <Border CornerRadius="18">
                 <Border.Background>
-                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                        <GradientStop Color="#FF2A2C3A" Offset="0" />
-                        <GradientStop Color="#FF15161D" Offset="1" />
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0.4,1">
+                        <GradientStop Color="#FF262936" Offset="0" />
+                        <GradientStop Color="#FF181A22" Offset="0.55" />
+                        <GradientStop Color="#FF121319" Offset="1" />
                     </LinearGradientBrush>
                 </Border.Background>
             </Border>
 
-            <!-- Two diagonal stripe layers at different speeds/opacities for a subtle parallax feel,
-                 both accent-tinted and built in code-behind alongside the icon glow. -->
-            <Border x:Name="StripesHostBack" CornerRadius="20" ClipToBounds="True" />
-            <Border x:Name="StripesHost" CornerRadius="20" ClipToBounds="True" />
-
-            <!-- 1px border -->
-            <Border CornerRadius="20" BorderThickness="1" BorderBrush="#2EFFFFFF" />
-
-            <!-- Soft pulsing halo behind the icon, tinted to the current accent colour. -->
-            <Ellipse x:Name="IconGlow" Width="116" Height="116" HorizontalAlignment="Left" VerticalAlignment="Top"
-                     Margin="12,40,0,0" IsHitTestVisible="False">
+            <!-- Two accent auroras drifting at different speeds and directions: the parallax the old
+                 stripes were reaching for, without a pattern scrolling across the card. -->
+            <Ellipse x:Name="AuroraA" Width="420" Height="300" HorizontalAlignment="Left" VerticalAlignment="Top"
+                     Margin="-150,-150,0,0" IsHitTestVisible="False">
                 <Ellipse.Effect>
-                    <BlurEffect Radius="28" />
+                    <BlurEffect Radius="80" />
                 </Ellipse.Effect>
+                <Ellipse.RenderTransform>
+                    <TranslateTransform x:Name="AuroraATransform" />
+                </Ellipse.RenderTransform>
             </Ellipse>
 
-            <!-- Content -->
-            <Image x:Name="LogoImage" Width="76" Height="76"
-                   HorizontalAlignment="Left" VerticalAlignment="Top" Margin="32,60,0,0"
-                   RenderTransformOrigin="0.5,0.5" Stretch="Uniform">
-                <Image.Effect>
-                    <DropShadowEffect Color="Black" BlurRadius="16" ShadowDepth="4" Opacity="0.4" Direction="270" />
-                </Image.Effect>
-                <Image.RenderTransform>
-                    <ScaleTransform x:Name="LogoScale" ScaleX="1" ScaleY="1" />
-                </Image.RenderTransform>
-            </Image>
+            <Ellipse x:Name="AuroraB" Width="330" Height="240" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                     Margin="0,0,-120,-120" IsHitTestVisible="False">
+                <Ellipse.Effect>
+                    <BlurEffect Radius="90" />
+                </Ellipse.Effect>
+                <Ellipse.RenderTransform>
+                    <TranslateTransform x:Name="AuroraBTransform" />
+                </Ellipse.RenderTransform>
+            </Ellipse>
 
-            <Border x:Name="TitleAccentBar" Width="4" Height="30" CornerRadius="2"
-                    HorizontalAlignment="Left" VerticalAlignment="Top" Margin="128,60,0,0" />
-
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="142,58,0,0">
-                <TextBlock Text="Lingstrap" FontSize="26" FontWeight="SemiBold" Foreground="#FFF5F6FA" VerticalAlignment="Bottom" />
-                <TextBlock x:Name="VersionText" FontSize="12" Foreground="#FFA8AFBE" VerticalAlignment="Bottom" Margin="10,0,0,4" />
-            </StackPanel>
-
-            <TextBlock x:Name="StatusText" Text="Checking for updates" FontSize="14" Foreground="#FFA8AFBE"
-                       TextWrapping="Wrap" MaxWidth="380"
-                       HorizontalAlignment="Left" VerticalAlignment="Top" Margin="142,96,0,0" />
-
-            <TextBlock x:Name="PercentText" Text="" FontSize="12" FontWeight="SemiBold" Foreground="#FFA8AFBE"
-                       HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,98,40,0" />
-
-            <Grid HorizontalAlignment="Stretch" VerticalAlignment="Top" Height="12" Margin="142,132,40,0">
-                <Border CornerRadius="6" Background="#29FFFFFF" />
-                <Border x:Name="ProgressClip" CornerRadius="6" ClipToBounds="True" HorizontalAlignment="Left">
-                    <Border x:Name="ProgressFill" CornerRadius="6" Background="{DynamicResource AccentFillColorDefaultBrush}"
-                            HorizontalAlignment="Left" Width="0" ClipToBounds="True">
-                        <!-- Decorative glossy sweep - purely visual, independent of the fill/slide
-                             animations above so it never fights StartIndeterminate's own RenderTransform. -->
-                        <Border Width="50" HorizontalAlignment="Left">
-                            <Border.RenderTransform>
-                                <TranslateTransform x:Name="ShimmerTransform" X="-50" />
-                            </Border.RenderTransform>
-                            <Border.Background>
-                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                    <GradientStop Color="#00FFFFFF" Offset="0" />
-                                    <GradientStop Color="#55FFFFFF" Offset="0.5" />
-                                    <GradientStop Color="#00FFFFFF" Offset="1" />
-                                </LinearGradientBrush>
-                            </Border.Background>
-                        </Border>
-                    </Border>
-                </Border>
-            </Grid>
+            <Border CornerRadius="18" BorderThickness="1" BorderBrush="#26FFFFFF" />
 
             <Button x:Name="CloseButton" Style="{StaticResource CloseButtonStyle}"
-                    HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,14,14,0"
+                    HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,11,11,0"
                     Click="CloseButton_Click" />
 
-            <ui:Button x:Name="CopyLogButton" Content="Copy log" Visibility="Collapsed"
-                       HorizontalAlignment="Left" VerticalAlignment="Top" Margin="142,156,0,0"
-                       Click="CopyLogButton_Click" />
+            <Grid Margin="24,20,24,20">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Grid Grid.Column="0" Width="46" Height="46">
+                        <!-- Breathing halo, tight behind the mark rather than a wash over the corner. -->
+                        <Ellipse x:Name="LogoHalo" Width="70" Height="70" IsHitTestVisible="False">
+                            <Ellipse.Effect>
+                                <BlurEffect Radius="26" />
+                            </Ellipse.Effect>
+                        </Ellipse>
+                        <Image x:Name="LogoImage" Width="46" Height="46" Stretch="Uniform"
+                               RenderTransformOrigin="0.5,0.5">
+                            <Image.RenderTransform>
+                                <ScaleTransform x:Name="LogoScale" ScaleX="1" ScaleY="1" />
+                            </Image.RenderTransform>
+                        </Image>
+                    </Grid>
+
+                    <StackPanel Grid.Column="1" Margin="14,2,30,0" VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Lingstrap" FontSize="20" FontWeight="Bold" Foreground="#FFF5F6FA" />
+                            <TextBlock x:Name="VersionText" FontSize="11" Foreground="#FF7C8496"
+                                       VerticalAlignment="Bottom" Margin="8,0,0,3" />
+                        </StackPanel>
+                        <TextBlock x:Name="SetupText" FontSize="12" Foreground="#FF9AA2B2" Margin="0,3,0,0"
+                                   TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                </Grid>
+
+                <Grid Grid.Row="2">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0" Margin="0,0,0,9">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,14,0">
+                            <TextBlock x:Name="StatusText" Text="Checking for updates" FontSize="15" FontWeight="SemiBold"
+                                       Foreground="#FFF5F6FA" TextTrimming="CharacterEllipsis" />
+                            <TextBlock x:Name="StageText" FontSize="11" Foreground="#FF7C8496" Margin="0,3,0,0" />
+                        </StackPanel>
+                        <TextBlock x:Name="PercentText" Grid.Column="1" Text="" FontSize="14" FontWeight="Bold"
+                                   Foreground="#FFF5F6FA" VerticalAlignment="Bottom" />
+                    </Grid>
+
+                    <Grid Grid.Row="1" Height="6">
+                        <Border CornerRadius="3" Background="#17FFFFFF" />
+                        <Border x:Name="ProgressClip" CornerRadius="3" ClipToBounds="True" HorizontalAlignment="Left">
+                            <Border x:Name="ProgressFill" CornerRadius="3" Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                    HorizontalAlignment="Left" Width="0" ClipToBounds="True">
+                                <Border Width="60" HorizontalAlignment="Left">
+                                    <Border.RenderTransform>
+                                        <TranslateTransform x:Name="ShimmerTransform" X="-60" />
+                                    </Border.RenderTransform>
+                                    <Border.Background>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                            <GradientStop Color="#00FFFFFF" Offset="0" />
+                                            <GradientStop Color="#66FFFFFF" Offset="0.5" />
+                                            <GradientStop Color="#00FFFFFF" Offset="1" />
+                                        </LinearGradientBrush>
+                                    </Border.Background>
+                                </Border>
+                            </Border>
+                        </Border>
+                    </Grid>
+
+                    <Grid Grid.Row="2" Margin="0,12,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Ellipse x:Name="Dot1" Style="{StaticResource StepDotStyle}" />
+                            <Ellipse x:Name="Dot2" Style="{StaticResource StepDotStyle}" />
+                            <Ellipse x:Name="Dot3" Style="{StaticResource StepDotStyle}" />
+                            <Ellipse x:Name="Dot4" Style="{StaticResource StepDotStyle}" />
+                            <Ellipse x:Name="Dot5" Style="{StaticResource StepDotStyle}" />
+                        </StackPanel>
+                        <ui:Button x:Name="CopyLogButton" Grid.Column="1" Content="Copy log" Visibility="Collapsed"
+                                   HorizontalAlignment="Right" Padding="10,3" FontSize="12"
+                                   Click="CopyLogButton_Click" />
+                    </Grid>
+                </Grid>
+            </Grid>
         </Grid>
     </Border>
 </Window>
