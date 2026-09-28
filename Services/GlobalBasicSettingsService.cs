@@ -25,11 +25,82 @@ public static class GlobalBasicSettingsService
         Path.Combine(Paths.RobloxRoot, "GlobalBasicSettings_13.xml");
 
     private record PendingEdit(string Tag, string? Value, float? X, float? Y, bool Remove);
-    private static readonly Dictionary<string, PendingEdit> Pending = new();
+
+    /// <summary>
+    /// Where edits made while Roblox is running wait to be applied. They used to live only in an
+    /// in-memory dictionary, while the Roblox Settings page promised "changes will be applied the
+    /// next time you launch" - true only if that next launch came from the same Lingstrap window
+    /// that was still open. "Close Lingstrap once Roblox starts" closes it automatically, and a
+    /// launch from the browser is always a fresh process, so the most common setting on the page
+    /// (the FPS cap), changed at the most natural moment (while playing), was silently thrown away.
+    /// Applying a preset while playing lost its graphics settings the same way.
+    /// </summary>
+    public static string PendingFile { get; set; } = Path.Combine(Paths.Root, "PendingRobloxSettings.json");
+
+    private static readonly object PendingLock = new();
+    private static readonly Dictionary<string, PendingEdit> Pending = LoadPending();
 
     public static bool IsRobloxRunning() => Process.GetProcessesByName("RobloxPlayerBeta").Length > 0;
     public static bool BackupExists() => File.Exists(FilePath + BackupSuffix);
-    public static bool HasPendingEdits => Pending.Count > 0;
+    public static bool HasPendingEdits { get { lock (PendingLock) return Pending.Count > 0; } }
+
+    private static Dictionary<string, PendingEdit> LoadPending()
+    {
+        try
+        {
+            if (File.Exists(PendingFile))
+            {
+                var loaded = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, PendingEdit>>(File.ReadAllText(PendingFile));
+                if (loaded is { Count: > 0 })
+                {
+                    Log.Info($"{loaded.Count} Roblox setting change(s) still waiting from an earlier session.");
+                    return loaded;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"Could not read the queued Roblox setting changes: {ex.Message}");
+        }
+        return new Dictionary<string, PendingEdit>();
+    }
+
+    /// <summary>Call with PendingLock held.</summary>
+    private static void SavePendingNoLock()
+    {
+        try
+        {
+            if (Pending.Count == 0)
+            {
+                if (File.Exists(PendingFile)) File.Delete(PendingFile);
+                return;
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(PendingFile)!);
+            File.WriteAllText(PendingFile, System.Text.Json.JsonSerializer.Serialize(Pending));
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"Could not save the queued Roblox setting changes: {ex.Message}");
+        }
+    }
+
+    private static void Queue(string name, PendingEdit edit)
+    {
+        lock (PendingLock)
+        {
+            Pending[name] = edit;
+            SavePendingNoLock();
+        }
+    }
+
+    private static void Unqueue(string name)
+    {
+        lock (PendingLock)
+        {
+            if (Pending.Remove(name)) SavePendingNoLock();
+        }
+    }
 
     /// <summary>Re-reads one field's current live value - e.g. right after ResetField, to refresh a row in place without a full reload. Null if the field or file no longer exists.</summary>
     public static GbsField? GetField(string name)
@@ -42,7 +113,9 @@ public static class GlobalBasicSettingsService
             var props = doc.XPathSelectElement(PropertiesXPath);
             var el = props?.Elements().FirstOrDefault(e => (string?)e.Attribute("name") == name);
             var field = el is null ? null : ParseField(el, name);
-            if (field != null && Pending.TryGetValue(name, out var pending) && !pending.Remove)
+            PendingEdit? pending;
+            lock (PendingLock) Pending.TryGetValue(name, out pending);
+            if (field != null && pending is { Remove: false })
             {
                 if (pending.X.HasValue) { field.VectorX = pending.X; field.VectorY = pending.Y; }
                 else field.RawValue = pending.Value;
@@ -97,11 +170,14 @@ public static class GlobalBasicSettingsService
     /// <summary>Overlays any edits queued while Roblox was running onto freshly-parsed fields, so the UI shows what will actually apply.</summary>
     public static void ApplyPendingOverlay(List<GbsField> fields)
     {
-        foreach (var f in fields)
+        lock (PendingLock)
         {
-            if (!Pending.TryGetValue(f.Name, out var p) || p.Remove) continue;
-            if (p.X.HasValue) { f.VectorX = p.X; f.VectorY = p.Y; }
-            else f.RawValue = p.Value;
+            foreach (var f in fields)
+            {
+                if (!Pending.TryGetValue(f.Name, out var p) || p.Remove) continue;
+                if (p.X.HasValue) { f.VectorX = p.X; f.VectorY = p.Y; }
+                else f.RawValue = p.Value;
+            }
         }
     }
 
@@ -110,10 +186,10 @@ public static class GlobalBasicSettingsService
         if (IsRobloxRunning())
         {
             Log.Info($"GBS field {name} queued (Roblox is currently running) - will apply on the next launch once it's closed.");
-            Pending[name] = new PendingEdit(tag, value, null, null, false);
+            Queue(name, new PendingEdit(tag, value, null, null, false));
             return;
         }
-        Pending.Remove(name);
+        Unqueue(name);
         WriteScalarNow(name, tag, value);
     }
 
@@ -122,10 +198,10 @@ public static class GlobalBasicSettingsService
         if (IsRobloxRunning())
         {
             Log.Info($"GBS field {name} queued (Roblox is currently running) - will apply on the next launch once it's closed.");
-            Pending[name] = new PendingEdit(tag, null, x, y, false);
+            Queue(name, new PendingEdit(tag, null, x, y, false));
             return;
         }
-        Pending.Remove(name);
+        Unqueue(name);
         WriteVector2Now(name, tag, x, y);
     }
 
@@ -134,10 +210,10 @@ public static class GlobalBasicSettingsService
         if (IsRobloxRunning())
         {
             Log.Info($"GBS field {name} removal queued (Roblox is currently running) - will apply on the next launch once it's closed.");
-            Pending[name] = new PendingEdit("", null, null, null, true);
+            Queue(name, new PendingEdit("", null, null, null, true));
             return;
         }
-        Pending.Remove(name);
+        Unqueue(name);
         RemoveFieldsNow(new[] { name });
     }
 
@@ -149,23 +225,34 @@ public static class GlobalBasicSettingsService
     /// <summary>Applies any edits queued while Roblox was running. Safe to call any time; no-ops if still running.</summary>
     public static void FlushPending()
     {
-        if (Pending.Count == 0) return;
-
-        if (IsRobloxRunning())
+        List<KeyValuePair<string, PendingEdit>> toApply;
+        lock (PendingLock)
         {
-            Log.Info($"{Pending.Count} pending GBS edit(s) not applied yet - a RobloxPlayerBeta process is still running. " +
-                     "If this keeps appearing on every launch even right after Roblox visibly closed, a stale/hung " +
-                     "RobloxPlayerBeta.exe is likely still alive in the background - check Task Manager.");
-            return;
+            if (Pending.Count == 0) return;
+
+            if (IsRobloxRunning())
+            {
+                Log.Info($"{Pending.Count} pending GBS edit(s) not applied yet - a RobloxPlayerBeta process is still running. " +
+                         "If this keeps appearing on every launch even right after Roblox visibly closed, a stale/hung " +
+                         "RobloxPlayerBeta.exe is likely still alive in the background - check Task Manager.");
+                return;
+            }
+
+            // Taken and cleared under the lock, so an edit made on the page while this is writing
+            // lands in the queue afterwards instead of being wiped by a Clear() that ran after it.
+            toApply = Pending.ToList();
+            Pending.Clear();
+            SavePendingNoLock();
         }
 
-        foreach (var (name, edit) in Pending.ToList())
+        foreach (var (name, edit) in toApply)
         {
             if (edit.Remove) RemoveFieldsNow(new[] { name });
             else if (edit.X.HasValue) WriteVector2Now(name, edit.Tag, edit.X.Value, edit.Y ?? 0);
             else WriteScalarNow(name, edit.Tag, edit.Value!);
         }
-        Pending.Clear();
+
+        Log.Info($"Applied {toApply.Count} Roblox setting change(s) that were waiting for Roblox to close.");
     }
 
     /// <summary>Resets one field to whatever value the backup has (or removes it if the backup doesn't have it either).</summary>
@@ -218,7 +305,11 @@ public static class GlobalBasicSettingsService
             // outright onto a read-only one - WithWriteAccess covers both, re-locking afterwards if
             // the file was locked before the restore.
             WithWriteAccess(() => File.Copy(backupPath, FilePath, overwrite: true));
-            Pending.Clear();
+            lock (PendingLock)
+            {
+                Pending.Clear();
+                SavePendingNoLock(); // otherwise the next launch would re-apply edits the user just threw away
+            }
             Log.Info("Restored GlobalBasicSettings_13.xml from backup.");
         }
         catch (Exception ex)
