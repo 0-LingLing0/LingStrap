@@ -45,7 +45,21 @@ public partial class App : Application
 
         DispatcherUnhandledException += (_, args) =>
         {
-            Log.Error("Unhandled UI exception", args.Exception);
+            // The full exception, stack trace included. This used to log only the type and message
+            // ("NullReferenceException: Object reference not set..."), so a crash report said what
+            // went wrong but never where - no way to find it from a pasted log.
+            LogUnhandled(args.Exception);
+
+            // Not marking it handled let WPF terminate the process: any exception escaping a click
+            // handler made Lingstrap vanish with no message at all. With a window open there's
+            // something worth keeping alive, so say what happened and carry on. With none (an
+            // exception during startup, or in a background watcher) there's nothing to return to,
+            // and an invisible process kept alive would be worse than exiting.
+            if (MainWindow is { IsVisible: true })
+            {
+                args.Handled = true;
+                ReportRecoveredError(args.Exception);
+            }
         };
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
@@ -300,6 +314,51 @@ public partial class App : Application
         // with nothing to act on.
         var window = new MainWindow();
         window.Show();
+    }
+
+    private static string? _lastUnhandledText;
+    private static DateTime _lastUnhandledLogged = DateTime.MinValue;
+    private static int _unhandledRepeats;
+
+    /// <summary>Now that the app survives an exception instead of exiting, one thrown from something
+    /// that repeats - a layout pass, a timer - comes back again and again, and logging a full stack
+    /// trace for every one grew the log by megabytes a minute. The same exception is logged once,
+    /// then as a count every 10 seconds while it keeps happening.</summary>
+    private static void LogUnhandled(Exception ex)
+    {
+        var text = ex.ToString();
+        if (text == _lastUnhandledText)
+        {
+            _unhandledRepeats++;
+            if (DateTime.UtcNow - _lastUnhandledLogged < TimeSpan.FromSeconds(10)) return;
+
+            Log.Error($"Unhandled UI exception: the same one again, {_unhandledRepeats} more time(s).");
+            _unhandledRepeats = 0;
+            _lastUnhandledLogged = DateTime.UtcNow;
+            return;
+        }
+
+        _lastUnhandledText = text;
+        _unhandledRepeats = 0;
+        _lastUnhandledLogged = DateTime.UtcNow;
+        Log.Error("Unhandled UI exception: " + text);
+    }
+
+    private static DateTime _lastRecoveredErrorShown = DateTime.MinValue;
+
+    /// <summary>Tells the user something failed without taking the app down. Rate-limited: an
+    /// exception thrown from something that repeats (a timer, a render pass) would otherwise stack up
+    /// a new message box every tick.</summary>
+    private static void ReportRecoveredError(Exception ex)
+    {
+        if (DateTime.UtcNow - _lastRecoveredErrorShown < TimeSpan.FromSeconds(10)) return;
+        _lastRecoveredErrorShown = DateTime.UtcNow;
+
+        System.Windows.MessageBox.Show(
+            $"Something went wrong: {ex.Message}\n\n" +
+            "Lingstrap kept running, but if something looks off, restart it. The details are in the log " +
+            "(About page > Open logs).",
+            "Lingstrap", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
     }
 
     protected override void OnExit(ExitEventArgs e)
