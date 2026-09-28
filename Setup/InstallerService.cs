@@ -117,11 +117,11 @@ public static class InstallerService
 
         try
         {
+            long totalRead = 0;
             await using (var httpStream = await response.Content.ReadAsStreamAsync())
             await using (var fileStream = File.Create(tempPath))
             {
                 var buffer = new byte[81920];
-                long totalRead = 0;
                 int read;
                 while ((read = await httpStream.ReadAsync(buffer)) > 0)
                 {
@@ -131,7 +131,20 @@ public static class InstallerService
                 }
             }
 
+            // GitHub states the exact size, so check it rather than trusting that a cut-off download
+            // always surfaces as an exception. Installing a truncated exe would leave a Lingstrap
+            // that can't start - and so can't update itself out of the problem either.
+            if (release.Size > 0 && totalRead != release.Size)
+                throw new InstallException(
+                    $"The download was incomplete ({totalRead:N0} of {release.Size:N0} bytes) - check your connection and run the installer again. Nothing was changed.");
+
             InstallOverExisting(tempPath);
+        }
+        catch (HttpIOException ex)
+        {
+            // Must come before IOException, which it derives from: a dropped connection used to be
+            // reported as "is Lingstrap still open?", sending people after the wrong problem.
+            throw new InstallException($"The download was interrupted - check your connection and run the installer again. Nothing was changed. ({ex.Message})");
         }
         catch (IOException ex)
         {
