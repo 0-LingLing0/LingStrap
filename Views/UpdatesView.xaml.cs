@@ -15,10 +15,9 @@ public partial class UpdatesView : Page
 
         UpdateModeCombo.SelectedIndex = (int)SettingsService.Current.UpdateMode;
 
-        var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.1.0";
         VersionRow.Content = new System.Windows.Controls.TextBlock
         {
-            Text = "v" + version,
+            Text = "v" + UpdateCheckerService.CurrentVersionText,
             FontSize = 13,
             Foreground = (System.Windows.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
         };

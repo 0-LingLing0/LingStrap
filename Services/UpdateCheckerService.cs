@@ -32,7 +32,7 @@ public static class UpdateCheckerService
     static UpdateCheckerService()
     {
         // GitHub's API rejects requests with no User-Agent at all.
-        Http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("Lingstrap", CurrentVersion().ToString(3)));
+        Http.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("Lingstrap", CurrentVersionText));
         Http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
     }
 
@@ -40,7 +40,12 @@ public static class UpdateCheckerService
     {
         try
         {
-            var response = await Http.GetAsync($"https://api.github.com/repos/{RepoOwner}/{RepoName}/releases/latest");
+            // Its own short limit rather than the client's 5-minute one, which is sized for downloading
+            // the installer. With AutoInstall this check runs before any window exists, so on a network
+            // that silently drops packets - a captive portal, a firewall - double-clicking Lingstrap
+            // showed nothing at all for up to five minutes. This is one small JSON request.
+            using var timeout = new System.Threading.CancellationTokenSource(TimeSpan.FromSeconds(10));
+            var response = await Http.GetAsync($"https://api.github.com/repos/{RepoOwner}/{RepoName}/releases/latest", timeout.Token);
 
             if (response.StatusCode == HttpStatusCode.NotFound)
             {
@@ -55,7 +60,7 @@ public static class UpdateCheckerService
                 return new UpdateCheckResult(UpdateStatus.CheckFailed, null, null, $"GitHub returned an error ({(int)response.StatusCode}).");
             }
 
-            var json = await response.Content.ReadAsStringAsync();
+            var json = await response.Content.ReadAsStringAsync(timeout.Token);
             using var doc = JsonDocument.Parse(json);
             var tagName = doc.RootElement.GetProperty("tag_name").GetString() ?? "";
             var releaseUrl = doc.RootElement.TryGetProperty("html_url", out var urlProp) ? urlProp.GetString() : null;
@@ -82,17 +87,22 @@ public static class UpdateCheckerService
             var current = CurrentVersion();
             if (latest > current)
             {
-                Log.Info($"Update check: a newer version is available ({latest.ToString(3)} > {current.ToString(3)}).");
-                return new UpdateCheckResult(UpdateStatus.UpdateAvailable, latest.ToString(3), releaseUrl, null,
+                Log.Info($"Update check: a newer version is available ({Format(latest)} > {Format(current)}).");
+                return new UpdateCheckResult(UpdateStatus.UpdateAvailable, Format(latest), releaseUrl, null,
                     string.IsNullOrWhiteSpace(releaseNotes) ? "(No release notes provided.)" : releaseNotes, setupUrl);
             }
 
-            Log.Info($"Update check: already up to date ({current.ToString(3)}).");
+            Log.Info($"Update check: already up to date ({Format(current)}, latest release {Format(latest)}).");
             // Release notes included here too (not just the UpdateAvailable branch below) so a
             // caller can show a "here's what's new" notice on the first launch of a version that
-            // was installed silently (UpdateCheckMode.AutoInstall never prompts beforehand).
-            return new UpdateCheckResult(UpdateStatus.UpToDate, current.ToString(3), releaseUrl, null,
-                string.IsNullOrWhiteSpace(releaseNotes) ? "(No release notes provided.)" : releaseNotes);
+            // was installed silently (UpdateCheckMode.AutoInstall never prompts beforehand) - but
+            // only when they ARE this version's notes. A build newer than the latest release (a
+            // local test build) would otherwise announce the previous release's notes as its own,
+            // and mark its version as announced before its real notes were ever published.
+            var notesForThisVersion = latest == current;
+            return new UpdateCheckResult(UpdateStatus.UpToDate, Format(current), releaseUrl, null,
+                !notesForThisVersion ? null
+                : string.IsNullOrWhiteSpace(releaseNotes) ? "(No release notes provided.)" : releaseNotes);
         }
         catch (Exception ex)
         {
@@ -138,12 +148,26 @@ public static class UpdateCheckerService
     }
 
     private static Version CurrentVersion() =>
-        Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 1, 0);
+        Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 1, 0, 0);
 
-    /// <summary>Release tags are typically "v0.2.0" or "0.2.0" - strip a leading "v" before parsing.</summary>
+    /// <summary>This build's version as people should see it - see Format.</summary>
+    public static string CurrentVersionText => Format(CurrentVersion());
+
+    /// <summary>
+    /// "0.2.7" for a feature release, "0.2.7.3" for a fix release. This used to be ToString(3)
+    /// everywhere, which dropped the fourth number: every fix release displayed as the release it
+    /// fixed, and because the "what's new" notice is keyed on this same text, a fix release that
+    /// AutoInstall put on silently was never announced at all - it looked already seen.
+    /// </summary>
+    private static string Format(Version version) => version.ToString(version.Revision > 0 ? 4 : 3);
+
+    /// <summary>Release tags are typically "v0.2.0" or "0.2.0" - strip a leading "v" before parsing.
+    /// Missing parts count as 0, the way the assembly version stores them, so "0.2.7" equals this
+    /// build's 0.2.7.0 rather than comparing as older than it.</summary>
     private static Version? ParseVersion(string tag)
     {
         var trimmed = tag.TrimStart('v', 'V');
-        return Version.TryParse(trimmed, out var v) ? v : null;
+        if (!Version.TryParse(trimmed, out var v)) return null;
+        return new Version(v.Major, v.Minor, Math.Max(v.Build, 0), Math.Max(v.Revision, 0));
     }
 }

@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using Lingstrap.Services;
@@ -12,10 +11,9 @@ public partial class AboutView : Page
     {
         InitializeComponent();
 
-        var version = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.1.0";
         VersionRow.Description = Paths.Root;
 
-        var text = new TextBlock { Text = "v" + version, FontSize = 13 };
+        var text = new TextBlock { Text = "v" + UpdateCheckerService.CurrentVersionText, FontSize = 13 };
         text.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
         VersionRow.Content = text;
     }

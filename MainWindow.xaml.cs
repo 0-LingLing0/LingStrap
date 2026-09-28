@@ -163,7 +163,8 @@ public partial class MainWindow : FluentWindow
             return;
         }
 
-        if (result.Status == UpdateCheckerService.UpdateStatus.UpToDate &&
+        // ReleaseNotes is null when the published notes aren't this build's own (see CheckForUpdateAsync).
+        if (result.Status == UpdateCheckerService.UpdateStatus.UpToDate && result.ReleaseNotes != null &&
             result.LatestVersion != null && result.LatestVersion != SettingsService.Current.LastSeenUpdateVersion)
         {
             // Record it as seen only once it has ACTUALLY been shown. Marking it first meant a
