@@ -24,6 +24,27 @@ public static class NetworkOptimizationService
     /// <summary>Runs every optimization, logging exactly what was found and changed on this machine (results vary by hardware/drivers).</summary>
     public static void RunAll()
     {
+        // Read BEFORE touching anything. Every step below records whatever value it finds as "the
+        // original" - which, on a second run, is the value the FIRST run already set. Writing that
+        // over the existing backup replaced the user's real settings with the optimized ones, and
+        // Restore from then on only "restored" the optimized state: the true originals were gone for
+        // good, system-wide, for every app on the machine. Optimize stays clickable after a run, so
+        // this was one click away. The oldest recorded value for each setting is the real original,
+        // so it always wins.
+        NetworkOptimizationBackup? existing;
+        try
+        {
+            existing = LoadExistingBackup();
+        }
+        catch
+        {
+            // Can't tell what the originals were, so changing anything now could lose them for good.
+            Log.Error("Network optimization NOT run: the existing backup couldn't be read, and running " +
+                      "anyway could overwrite the only record of your original settings. Use Restore, or " +
+                      $"remove {Paths.NetworkOptimizationBackupFile} yourself if you're sure it's not needed.");
+            return;
+        }
+
         var backup = new NetworkOptimizationBackup();
 
         DisableAdapterPowerSaving(backup);
@@ -40,6 +61,12 @@ public static class NetworkOptimizationService
             return;
         }
 
+        if (existing != null)
+        {
+            backup = MergeKeepingOriginals(existing, backup);
+            Log.Info("Network optimization had already run - kept the original values from the first run, so Restore still returns to them.");
+        }
+
         try
         {
             Paths.EnsureCreated();
@@ -50,6 +77,44 @@ public static class NetworkOptimizationService
         {
             Log.Warn($"Could not save the network optimization backup - Restore won't be able to undo this run: {ex.Message}");
         }
+    }
+
+    private static NetworkOptimizationBackup? LoadExistingBackup()
+    {
+        if (!HasBackup()) return null;
+        try
+        {
+            return JsonSerializer.Deserialize<NetworkOptimizationBackup>(File.ReadAllText(Paths.NetworkOptimizationBackupFile));
+        }
+        catch (Exception ex)
+        {
+            // Unreadable. Don't overwrite it: it may still be recoverable by hand, and it's the only
+            // record of the true originals. RunAll stops before changing anything.
+            Log.Warn($"Existing network optimization backup is unreadable ({ex.Message}) - keeping it as it is.");
+            throw;
+        }
+    }
+
+    /// <summary>The first run's value for every setting both runs touched, plus anything only the new
+    /// run touched (e.g. an adapter that wasn't connected the first time).</summary>
+    private static NetworkOptimizationBackup MergeKeepingOriginals(NetworkOptimizationBackup first, NetworkOptimizationBackup latest)
+    {
+        var merged = new NetworkOptimizationBackup
+        {
+            NetworkThrottling = first.NetworkThrottling ?? latest.NetworkThrottling,
+            QosReservedBandwidth = first.QosReservedBandwidth ?? latest.QosReservedBandwidth,
+            DeliveryOptimization = first.DeliveryOptimization ?? latest.DeliveryOptimization,
+        };
+
+        merged.AdapterPower.AddRange(first.AdapterPower);
+        merged.AdapterPower.AddRange(latest.AdapterPower
+            .Where(l => first.AdapterPower.All(f => f.InstanceName != l.InstanceName)));
+
+        merged.AdapterParams.AddRange(first.AdapterParams);
+        merged.AdapterParams.AddRange(latest.AdapterParams
+            .Where(l => first.AdapterParams.All(f => f.SubKeyName != l.SubKeyName || f.ParamName != l.ParamName)));
+
+        return merged;
     }
 
     /// <summary>Puts back exactly what RunAll's backup recorded, then deletes the backup file so the
@@ -337,7 +402,15 @@ public static class NetworkOptimizationService
                     continue;
                 }
 
-                adapterKey.SetValue(entry.ParamName, entry.OriginalValue);
+                // An empty original means the value didn't exist - the property was at its driver
+                // default, which is the common case for a setting nobody has touched in Device Manager.
+                // Writing "" back doesn't restore that: it leaves an empty, invalid value where the
+                // driver expects one of its enum options. Removing it is what hands control back to
+                // the driver default, which is exactly how it was.
+                if (entry.OriginalValue.Length == 0)
+                    adapterKey.DeleteValue(entry.ParamName, throwOnMissingValue: false);
+                else
+                    adapterKey.SetValue(entry.ParamName, entry.OriginalValue);
                 Log.Info($"Adapter advanced properties: restored '{entry.Description}'.");
                 restored++;
             }
