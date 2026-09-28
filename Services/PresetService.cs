@@ -89,16 +89,38 @@ public static class PresetService
         return preset;
     }
 
-    /// <summary>Applies a saved preset exactly like a built-in one, except the flag list is REPLACED
-    /// wholesale rather than clear-then-lay-down over a fixed managed set - a saved preset is a
-    /// complete snapshot already, including whatever the user hand-added beyond the built-in flags.</summary>
+    /// <summary>
+    /// Makes exactly the preset's flags active - every flag in it on, with its value, and every other
+    /// flag off - without deleting anything from the list.
+    ///
+    /// This used to clear the list and rebuild it from the preset. But a saved preset only records
+    /// the flags that were ENABLED when it was saved, so applying one permanently deleted every flag
+    /// the user had switched off to keep for later, plus anything added since the preset was saved.
+    /// Turning the others off reproduces the snapshot's effect just as exactly, and they're still
+    /// there to switch back on.
+    /// </summary>
     public static void ApplySaved(SavedPreset preset)
     {
         var s = SettingsService.Current;
 
-        s.CustomFlags.Clear();
+        foreach (var flag in s.CustomFlags)
+        {
+            if (preset.Flags.TryGetValue(flag.Name, out var value))
+            {
+                flag.Value = value;
+                flag.Enabled = true;
+            }
+            else
+            {
+                flag.Enabled = false;
+            }
+        }
+
         foreach (var (name, value) in preset.Flags)
-            s.CustomFlags.Add(new FastFlagEntry { Name = name, Value = value, Enabled = true });
+        {
+            if (s.CustomFlags.All(f => f.Name != name))
+                s.CustomFlags.Add(new FastFlagEntry { Name = name, Value = value, Enabled = true });
+        }
 
         GlobalBasicSettingsService.RemoveFields(PresetCatalog.ManagedGbsFields);
         foreach (var (name, field) in preset.GbsFields)
