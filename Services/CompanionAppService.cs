@@ -82,6 +82,14 @@ public static class CompanionAppService
                 var remaining = startedAt.AddSeconds(entry.StartupDelaySeconds) - DateTime.UtcNow;
                 if (remaining > TimeSpan.Zero) Thread.Sleep(remaining);
 
+                // Roblox may have closed during that delay. Launching anyway meant the app opened
+                // after the game was already gone, only for the loop below to close it again at once.
+                if (Process.GetProcessesByName("RobloxPlayerBeta").Length == 0)
+                {
+                    Log.Info($"Roblox closed before '{entry.Name}' was due to start - not starting it, or anything after it.");
+                    break;
+                }
+
                 var pid = LaunchOne(entry);
                 if (pid is { } id) launched.Add((id, entry));
             }
