@@ -115,14 +115,6 @@ public static class RobloxInstallerService
         "</Settings>\r\n";
 
     /// <summary>
-    /// The version hash Roblox is currently serving for the Windows player, or null if the check
-    /// failed. Uses its own short timeout rather than Http's shared 10-minute one (sized for large
-    /// package downloads) - this is a single lightweight metadata request that should normally
-    /// finish in well under a second, so on a slow or flaky connection it should fail fast and let
-    /// the launch fall back to whatever's already installed, instead of stalling the entire launch
-    /// for minutes on just the update check.
-    /// </summary>
-    /// <summary>
     /// How long a version answer stays good enough to reuse. Every launch used to wait on Roblox's
     /// version API before doing anything else, and that API is regularly slow - seven seconds in one
     /// measured launch here, and Roblox's own logs show it taking five and twenty-one seconds for
@@ -136,6 +128,12 @@ public static class RobloxInstallerService
     /// </summary>
     private static readonly TimeSpan VersionCacheLifetime = TimeSpan.FromMinutes(30);
 
+    /// <summary>
+    /// The version hash Roblox is currently serving for the Windows player, or null if the check
+    /// failed. Uses its own short timeout rather than the shared client's long one (sized for large
+    /// package downloads), so on a slow or flaky connection it fails fast and the launch falls back to
+    /// whatever's already installed.
+    /// </summary>
     public static async Task<string?> GetLatestVersionAsync()
     {
         var settings = SettingsService.Current;
@@ -208,6 +206,7 @@ public static class RobloxInstallerService
     public static async Task InstallAsync(string version, ILaunchProgressDialog dialog, CancellationToken cancellationToken = default)
     {
         var versionFolder = Path.Combine(Paths.RobloxVersions, version);
+        var folderExistedBefore = Directory.Exists(versionFolder);
         Directory.CreateDirectory(versionFolder);
 
         var tempDir = Path.Combine(Path.GetTempPath(), $"Lingstrap-install-{version}");
@@ -216,7 +215,7 @@ public static class RobloxInstallerService
         try
         {
             dialog.SetStatus("Downloading Roblox");
-            var packages = await GetManifestAsync(version);
+            var packages = await GetManifestAsync(version, cancellationToken);
 
             var totalBytes = packages.Sum(p => p.CompressedSize);
             long downloadedBytes = 0;
@@ -287,8 +286,17 @@ public static class RobloxInstallerService
             // looks like a valid install to RobloxLocator - which only checks that the exe exists,
             // not that the whole install actually finished - and it would keep getting reused
             // indefinitely. Better to wipe it so the next launch attempt installs fresh instead.
-            try { Directory.Delete(versionFolder, recursive: true); }
-            catch (Exception cleanupEx) { Log.Warn($"Could not clean up failed install at {versionFolder}: {cleanupEx.Message}"); }
+            //
+            // But only a folder this attempt created. If it was already there, it may be a working
+            // install - and a download failing partway (a dropped connection, a Cancel) is no reason to
+            // delete it. That case leaves it untouched, since extraction only starts once every package
+            // has downloaded and verified; and a failure partway through extraction has only rewritten
+            // this same version's files over themselves.
+            if (!folderExistedBefore)
+            {
+                try { Directory.Delete(versionFolder, recursive: true); }
+                catch (Exception cleanupEx) { Log.Warn($"Could not clean up failed install at {versionFolder}: {cleanupEx.Message}"); }
+            }
             throw;
         }
         finally
@@ -336,16 +344,26 @@ public static class RobloxInstallerService
         }
     }
 
-    private static async Task<List<RobloxPackage>> GetManifestAsync(string version)
+    private static async Task<List<RobloxPackage>> GetManifestAsync(string version, CancellationToken cancellationToken)
     {
         string text;
         try
         {
-            var response = await Http.GetAsync($"https://setup.rbxcdn.com/{version}-rbxPkgManifest.txt");
+            // The one request in the install that wasn't given the token, so Cancel did nothing while
+            // it ran - and on a stalled CDN it hung the launch for the client's full multi-minute
+            // timeout. A few KB of text needs nowhere near that long.
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(20));
+
+            var response = await Http.GetAsync($"https://setup.rbxcdn.com/{version}-rbxPkgManifest.txt", timeout.Token);
             if (!response.IsSuccessStatusCode)
                 throw new RobloxInstallException(
                     $"Could not download the Roblox package manifest for {version}: HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
-            text = await response.Content.ReadAsStringAsync();
+            text = await response.Content.ReadAsStringAsync(timeout.Token);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new RobloxInstallException("Roblox's CDN didn't send the package manifest in time - check your connection and try again.");
         }
         catch (HttpRequestException ex)
         {
