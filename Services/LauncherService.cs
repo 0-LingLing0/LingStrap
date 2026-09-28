@@ -2,6 +2,8 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -213,41 +215,46 @@ public static class LauncherService
                 break;
             }
 
-            // Only now - a window actually appeared, so the new install demonstrably runs. Deleting
-            // it right after Process.Start returned (which is what this used to do) meant a new
-            // version that crashed on startup took the user's last working install down with it,
-            // leaving them nothing to fall back to and no way to tell Lingstrap to stop trying.
-            // Keeping the old folder costs disk space until the next successful launch; losing it
-            // costs the user their game.
-            // Deliberately NOT on a handoff: the client that took the launch is very likely running
-            // out of the old folder (that's why it was already open), and deleting a version folder
-            // from under a running Roblox breaks it mid-session. It gets removed on the next launch
-            // that genuinely opens its own window.
-            if (windowAppeared && oldVersionFolderToRemove != null)
-            {
-                try
-                {
-                    Directory.Delete(oldVersionFolderToRemove, recursive: true);
-                    Log.Info($"Removed old Roblox version folder {oldVersionFolderToRemove}");
-                }
-                catch (Exception ex)
-                {
-                    Log.Warn($"Could not remove old Roblox version folder {oldVersionFolderToRemove}: {ex.Message}");
-                }
-            }
-
             if (windowAppeared || handedOff)
             {
+                var s = SettingsService.Current;
+                var settingsChanged = false;
+
                 // This version has now proven it runs, so stop holding it against it - otherwise a
                 // single bad launch would keep it pinned to an older Roblox indefinitely. Only
                 // clears when it's *this* version that succeeded: launching the older fallback
                 // successfully says nothing about whether the newer one is still broken.
-                if (SettingsService.Current.FailedRobloxVersion == Path.GetFileName(versionFolder))
+                if (s.FailedRobloxVersion == Path.GetFileName(versionFolder))
                 {
-                    SettingsService.Current.FailedRobloxVersion = null;
-                    SettingsService.Save();
+                    s.FailedRobloxVersion = null;
+                    settingsChanged = true;
                 }
+
+                // Only now - the launch worked, so the new install demonstrably runs. Deleting the old
+                // one right after Process.Start returned (which is what this used to do) meant a new
+                // version that crashed on startup took the user's last working install down with it,
+                // leaving them nothing to fall back to and no way to tell Lingstrap to stop trying.
+                // Queued rather than deleted on the spot, so a folder that can't go yet is retried
+                // later instead of forgotten: skipping it used to mean it stayed on disk for good.
+                if (oldVersionFolderToRemove != null)
+                {
+                    var name = Path.GetFileName(oldVersionFolderToRemove);
+                    if (!s.VersionFoldersToRemove.Contains(name))
+                    {
+                        s.VersionFoldersToRemove.Add(name);
+                        settingsChanged = true;
+                    }
+                }
+
+                if (settingsChanged) SettingsService.Save();
             }
+
+            // Deliberately NOT on a handoff: the client that took the launch is very likely running
+            // out of the old folder (that's why it was already open), and deleting a version folder
+            // from under a running Roblox breaks it mid-session. It stays queued for the next launch
+            // that genuinely opens its own window.
+            if (windowAppeared)
+                RemoveReplacedVersionFolders(versionFolder);
 
             if (!windowAppeared && !handedOff)
             {
@@ -281,7 +288,7 @@ public static class LauncherService
                     // (FastFlags, FPS cap, everything) instead of writing it, forever, until that
                     // process is gone - so a single hung launch left alive would silently make every
                     // future settings change do nothing, with no visible error. Better to close it.
-                    reason = "Roblox's window never appeared within 30 seconds - it appears to be hung, so it's being closed.";
+                    reason = $"Roblox's window never appeared within {WindowTimeoutSeconds} seconds - it appears to be hung, so it's being closed.";
                     TryKillLaunchingProcess(process!);
                 }
                 Log.Error(reason);
@@ -303,6 +310,114 @@ public static class LauncherService
         {
             dialog.CancelRequested -= OnCancel;
         }
+    }
+
+    /// <summary>
+    /// Deletes the queued version folders that earlier upgrades replaced (see VersionFoldersToRemove).
+    /// Anything that can't go yet stays queued and is tried again after the next launch.
+    /// </summary>
+    private static void RemoveReplacedVersionFolders(string currentVersionFolder)
+    {
+        var s = SettingsService.Current;
+        var current = Path.GetFileName(currentVersionFolder);
+        var queueChanged = false;
+
+        foreach (var name in s.VersionFoldersToRemove.ToList())
+        {
+            var folder = Path.Combine(Paths.RobloxVersions, name);
+
+            // Gone already, or back in use as the install itself (reverted to after a newer version
+            // crashed on startup) - either way it's no longer something to delete.
+            if (name == current || name == s.InstalledRobloxVersion || !Directory.Exists(folder))
+            {
+                s.VersionFoldersToRemove.Remove(name);
+                queueChanged = true;
+                continue;
+            }
+
+            // With multi-instance on, a client started before a Roblox update is still running out of
+            // the old folder when a second launch installs the new version - and the new client
+            // opening its own window makes this look like an ordinary successful upgrade. Windows
+            // refuses to delete files a process has open, but not the ones it hasn't loaded yet, so
+            // deleting here stripped textures, sounds and fonts out from under a live session and left
+            // a half-deleted folder when the locked files made Directory.Delete throw partway.
+            if (IsInUseByRunningClient(folder))
+            {
+                Log.Info($"Kept old Roblox version folder {folder} for now - a client is still running from it. It's retried after the next launch.");
+                continue;
+            }
+
+            try
+            {
+                Directory.Delete(folder, recursive: true);
+                Log.Info($"Removed old Roblox version folder {folder}");
+                s.VersionFoldersToRemove.Remove(name);
+                queueChanged = true;
+            }
+            catch (Exception ex)
+            {
+                Log.Warn($"Could not remove old Roblox version folder {folder} - it's retried after the next launch: {ex.Message}");
+            }
+        }
+
+        if (queueChanged) SettingsService.Save();
+    }
+
+    /// <summary>Whether any running Roblox client's executable lives inside this folder.</summary>
+    private static bool IsInUseByRunningClient(string versionFolder)
+    {
+        var root = Path.GetFullPath(versionFolder).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+
+        foreach (var client in Process.GetProcessesByName("RobloxPlayerBeta"))
+        {
+            using (client)
+            {
+                // Can't tell where it's running from (it's exiting, or access was refused). Treat it
+                // as possibly this folder: keeping one only postpones deleting it to the next launch,
+                // deleting a live one costs the session.
+                var exe = GetExePath(client.Id);
+                if (exe == null || Path.GetFullPath(exe).StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// A process's executable path, asking only for the limited query right Task Manager uses.
+    /// Process.MainModule gets the same answer by reading the process's memory - more access than
+    /// this needs, and exactly the kind that anti-cheat software watches other processes for.
+    /// </summary>
+    private static string? GetExePath(int processId)
+    {
+        var handle = Native.OpenProcess(Native.ProcessQueryLimitedInformation, false, processId);
+        if (handle == IntPtr.Zero) return null;
+
+        try
+        {
+            var buffer = new StringBuilder(1024);
+            var length = buffer.Capacity;
+            return Native.QueryFullProcessImageName(handle, 0, buffer, ref length) ? buffer.ToString(0, length) : null;
+        }
+        finally
+        {
+            Native.CloseHandle(handle);
+        }
+    }
+
+    private static class Native
+    {
+        public const uint ProcessQueryLimitedInformation = 0x1000;
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern IntPtr OpenProcess(uint desiredAccess, bool inheritHandle, int processId);
+
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        public static extern bool QueryFullProcessImageName(IntPtr process, uint flags, StringBuilder exeName, ref int size);
+
+        [DllImport("kernel32.dll")]
+        public static extern bool CloseHandle(IntPtr handle);
     }
 
     private static void TryKillLaunchingProcess(Process process)
@@ -582,9 +697,19 @@ public static class LauncherService
     /// spend most of its visible time right here, so a bar that visibly keeps inching forward reads
     /// as "still working" far better than one that just floats in place the whole time.
     /// </summary>
+    /// <summary>
+    /// How long to wait for Roblox's window before calling the launch hung and closing it. This was
+    /// 30 seconds, which a mid-range laptop clears in about eight - but an older PC on a hard drive,
+    /// launching the first time after a Roblox update, can genuinely need longer, and at 30 Lingstrap
+    /// was killing a healthy Roblox on every launch there. A real hang is rare enough that waiting a
+    /// while longer to be sure costs almost nothing.
+    /// </summary>
+    private const int WindowTimeoutSeconds = 90;
+
     private static async Task<bool> WaitForRobloxWindowAsync(Process process, Func<bool> isCancelled, ILaunchProgressDialog dialog)
     {
-        const double startPercent = 85, endPercent = 98, timeoutSeconds = 30;
+        const double startPercent = 85, endPercent = 98;
+        const double timeoutSeconds = WindowTimeoutSeconds;
         var start = DateTime.UtcNow;
         var deadline = start.AddSeconds(timeoutSeconds);
 

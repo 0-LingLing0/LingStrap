@@ -115,6 +115,11 @@ public class LingstrapSettings
     /// while a working older install sits right next to it, unused.</summary>
     public string? FailedRobloxVersion { get; set; }
 
+    /// <summary>Replaced Roblox version folders still waiting to be deleted - kept because a client
+    /// was running from one at the time (multi-instance), or the launch was handed to an already
+    /// running client. Retried after every launch that opens its own window.</summary>
+    public List<string> VersionFoldersToRemove { get; set; } = new();
+
     /// <summary>Keeps GlobalBasicSettings_13.xml read-only so Roblox can't overwrite it on exit.
     /// Re-applied every launch, since Roblox recreates the file if it's ever deleted.</summary>
     public bool LockGlobalSettings { get; set; }
