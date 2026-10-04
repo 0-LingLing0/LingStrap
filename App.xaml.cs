@@ -200,6 +200,14 @@ public partial class App : Application
             return;
         }
 
+        // The "Roblox (Lingstrap)" shortcut: a bare launch to the Roblox home screen, the same one the
+        // Launch button does, without opening the main window first.
+        if (LaunchArgs.Length > 0 && LaunchArgs[0].Equals(ShortcutService.LaunchArg, StringComparison.OrdinalIgnoreCase))
+        {
+            HandleRobloxLaunch("");
+            return;
+        }
+
         try { ProtocolHandlerService.Register(); }
         catch (Exception ex) { Log.Warn($"Could not register protocol handler: {ex.Message}"); }
 

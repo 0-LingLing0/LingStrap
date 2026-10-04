@@ -329,6 +329,16 @@ public partial class BehaviourView : Page
 
     // ---- network optimization (runs the actual changes in an elevated helper process) ----
 
+    private async void CreateLaunchShortcut_Click(object sender, RoutedEventArgs e)
+    {
+        if (ShortcutService.CreateLaunchShortcuts())
+            await DialogHelper.ShowErrorAsync(this,
+                $"\"{ShortcutService.LaunchShortcutName}\" is on your desktop and in the Start menu. Opening it starts Roblox through Lingstrap right away.",
+                "Shortcut created");
+        else
+            await DialogHelper.ShowErrorAsync(this, "Could not create the shortcut - see the log for details.");
+    }
+
     private async void OptimizeNetwork_Click(object sender, RoutedEventArgs e)
     {
         var confirmed = await DialogHelper.ShowConfirmAsync(this,
