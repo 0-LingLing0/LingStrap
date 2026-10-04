@@ -339,6 +339,33 @@ public partial class BehaviourView : Page
             await DialogHelper.ShowErrorAsync(this, "Could not create the shortcut - see the log for details.");
     }
 
+    private async void SetAsRobloxLauncher_Click(object sender, RoutedEventArgs e)
+    {
+        string? launcher;
+        try { launcher = ProtocolHandlerService.SetAsRobloxLauncher(); }
+        catch (Exception ex)
+        {
+            Log.Error("Could not set Lingstrap as the Roblox launcher", ex);
+            launcher = null;
+        }
+
+        if (launcher == null)
+        {
+            await DialogHelper.ShowErrorAsync(this, "Could not set Lingstrap as the Roblox launcher - see the log for details.");
+            return;
+        }
+
+        try { Clipboard.SetText(launcher); } catch { /* clipboard busy - the path is in the message too */ }
+        try { Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{launcher}\"")); } catch { }
+        try { Process.Start(new ProcessStartInfo { FileName = "ms-settings:defaultapps?registeredAppUser=Lingstrap", UseShellExecute = true }); } catch { }
+
+        await DialogHelper.ShowErrorAsync(this,
+            "Lingstrap is now the Roblox launcher. If Windows Settings opened, make sure \"roblox-player\" is set to Lingstrap there.\n\n" +
+            $"The launcher file is shown in Explorer and its path is copied:\n{launcher}\n\n" +
+            "In a macro's launcher setting, pick that file (or paste the path), then restart the macro.",
+            "Roblox launcher set");
+    }
+
     private async void OptimizeNetwork_Click(object sender, RoutedEventArgs e)
     {
         var confirmed = await DialogHelper.ShowConfirmAsync(this,
