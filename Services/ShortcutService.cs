@@ -40,7 +40,11 @@ public static class ShortcutService
             return false;
 
         var mainExe = Path.Combine(Path.GetDirectoryName(exePath)!, MainExeName);
-        var forwarded = args.Length > 0 ? args : new[] { LaunchArg };
+        // A macro running the protocol command itself can fill in "%1" with nothing, or leave it in
+        // literally - either way that's "no link", which has to mean "launch Roblox", not an empty
+        // argument that would open the main window after all.
+        var real = args.Where(a => !string.IsNullOrWhiteSpace(a) && a != "%1").ToArray();
+        var forwarded = real.Length > 0 ? real : new[] { LaunchArg };
 
         try
         {
@@ -57,6 +61,43 @@ public static class ShortcutService
         return true;
     }
 
+    /// <summary>
+    /// The launcher copy next to Lingstrap.exe, created - or refreshed after an update - when needed.
+    /// Null if it doesn't exist and couldn't be made. Only call from Lingstrap.exe itself.
+    /// </summary>
+    public static string? EnsureLauncherCopy()
+    {
+        var exePath = Environment.ProcessPath;
+        if (string.IsNullOrEmpty(exePath)) return null;
+
+        var launcher = Path.Combine(Path.GetDirectoryName(exePath)!, LauncherExeName);
+        if (Path.GetFullPath(exePath).Equals(Path.GetFullPath(launcher), StringComparison.OrdinalIgnoreCase)) return launcher;
+
+        // Forwarding never changes, so an old copy works fine - refreshing it just keeps it from
+        // looking out of date in Explorer, and costs a 17 MB copy only once per update.
+        if (File.Exists(launcher) &&
+            FileVersionInfo.GetVersionInfo(launcher).FileVersion == FileVersionInfo.GetVersionInfo(exePath).FileVersion)
+            return launcher;
+
+        try
+        {
+            File.Copy(exePath, launcher, overwrite: true);
+            Log.Info($"Created {LauncherExeName}.");
+        }
+        catch (Exception ex) when (File.Exists(launcher))
+        {
+            // In use right now (a launch is going through it) - the existing copy forwards just as well.
+            Log.Info($"Kept the existing {LauncherExeName}: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"Could not create {LauncherExeName}: {ex.Message}");
+            return null;
+        }
+
+        return launcher;
+    }
+
     /// <summary>Desktop and Start menu. True if at least one was created.</summary>
     public static bool CreateLaunchShortcuts()
     {
@@ -67,21 +108,8 @@ public static class ShortcutService
             return false;
         }
 
-        var launcher = Path.Combine(Path.GetDirectoryName(exePath)!, LauncherExeName);
-        try
-        {
-            File.Copy(exePath, launcher, overwrite: true);
-        }
-        catch (Exception ex) when (File.Exists(launcher))
-        {
-            // In use right now (a launch is going through it) - the existing copy forwards just as well.
-            Log.Info($"Kept the existing {LauncherExeName}: {ex.Message}");
-        }
-        catch (Exception ex)
-        {
-            Log.Warn($"Could not create {LauncherExeName}: {ex.Message}");
-            return false;
-        }
+        var launcher = EnsureLauncherCopy();
+        if (launcher == null) return false;
 
         var results = new[]
         {

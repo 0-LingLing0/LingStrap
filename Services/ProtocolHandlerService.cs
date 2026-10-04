@@ -17,6 +17,12 @@ public static class ProtocolHandlerService
             return;
         }
 
+        // Registered to the launcher copy rather than Lingstrap.exe. Macros (Revolution Macro, for
+        // one) find "the Roblox launcher" by reading this command and run that exe with no
+        // arguments - which for Lingstrap.exe means opening the settings window instead of Roblox.
+        // The copy launches Roblox when given nothing and passes a website link on unchanged.
+        var handler = ShortcutService.EnsureLauncherCopy() ?? exePath;
+
         using var key = Registry.CurrentUser.CreateSubKey(ProtocolKey);
         key.SetValue("", "URL:Roblox Protocol");
         key.SetValue("URL Protocol", "");
@@ -25,7 +31,7 @@ public static class ProtocolHandlerService
             iconKey.SetValue("", $"{exePath},0");
 
         using (var commandKey = key.CreateSubKey(@"shell\open\command"))
-            commandKey.SetValue("", $"\"{exePath}\" \"%1\"");
+            commandKey.SetValue("", $"\"{handler}\" \"%1\"");
 
         Log.Info("Registered as the roblox-player: protocol handler.");
     }
