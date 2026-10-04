@@ -67,6 +67,16 @@ public partial class App : Application
         };
 
         LaunchArgs = e.Args;
+
+        // Started as the launcher copy (see ShortcutService): hand straight over to the real exe and
+        // leave. Settings were never loaded here, so OnExit must not save them.
+        if (ShortcutService.ForwardIfLauncherCopy(LaunchArgs))
+        {
+            _isWatcherMode = true;
+            Shutdown();
+            return;
+        }
+
         IsRobloxLaunch = LaunchArgs.Length > 0 &&
                          LaunchArgs[0].StartsWith("roblox", StringComparison.OrdinalIgnoreCase);
 
