@@ -80,8 +80,8 @@
                               Description="Caps how much RAM each Roblox window keeps; the rest moves to the page file on disk. Nothing crashes, but a game you play yourself will stutter - meant for AFK accounts. Applies 45 seconds after a window opens, so joining stays quick.">
                     <ComboBox x:Name="MemoryLimitCombo" MinWidth="130" SelectionChanged="Limits_Changed">
                         <ComboBoxItem Content="Off" Tag="0" />
-                        <ComboBoxItem Content="50 MB" Tag="50" />
                         <ComboBoxItem Content="100 MB" Tag="100" />
+                        <ComboBoxItem Content="150 MB" Tag="150" />
                         <ComboBoxItem Content="200 MB" Tag="200" />
                         <ComboBoxItem Content="300 MB" Tag="300" />
                         <ComboBoxItem Content="500 MB" Tag="500" />
@@ -92,12 +92,9 @@
                 </v:SettingRow>
 
                 <v:SettingRow Title="CPU limit per account"
-                              Description="A hard cap on how much CPU each Roblox window may use, in % of your whole CPU (the same number Task Manager shows). Lifted while a window is &quot;Not Responding&quot; so it can catch up. Too low can make accounts lag or disconnect - start around 2% and go down step by step.">
+                              Description="A hard cap on how much CPU each Roblox window may use, in % of your whole CPU (the same number Task Manager shows). Lifted while a window is &quot;Not Responding&quot; so it can catch up. Lower than 2% made accounts unstable, so that's the lowest option.">
                     <ComboBox x:Name="CpuLimitCombo" MinWidth="130" SelectionChanged="Limits_Changed">
                         <ComboBoxItem Content="Off" Tag="0" />
-                        <ComboBoxItem Content="0.5%" Tag="0.5" />
-                        <ComboBoxItem Content="1%" Tag="1" />
-                        <ComboBoxItem Content="1.5%" Tag="1.5" />
                         <ComboBoxItem Content="2%" Tag="2" />
                         <ComboBoxItem Content="3%" Tag="3" />
                         <ComboBoxItem Content="5%" Tag="5" />

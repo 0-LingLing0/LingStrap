@@ -34,6 +34,10 @@ public static class SettingsService
             Current = TryLoadFrom(Paths.SettingsFile) ?? TryLoadFromBackup() ?? new LingstrapSettings();
             Log.Info($"Settings loaded. Preset={Current.ActivePreset}, custom flags={Current.CustomFlags.Count}");
 
+            // In memory only, no save: the watcher processes load settings too, and only the main
+            // app may write the file. The corrected value is saved the next time it saves anything.
+            RaiseUnstableLimits(Current);
+
             // Deserialising silently ignores keys that no longer exist on the model, so an older
             // file keeps carrying them until something rewrites it. Save once here to drop them.
             if (Current.SchemaVersion < LingstrapSettings.CurrentSchemaVersion)
@@ -48,6 +52,27 @@ public static class SettingsService
         {
             Log.Error("Could not read settings, falling back to defaults", ex);
             Current = new LingstrapSettings();
+        }
+    }
+
+    /// <summary>The lowest client limits that proved stable in real use. 50 MB of RAM and CPU caps
+    /// under 2% were offered for a while, and made accounts freeze and drop - anyone still on one is
+    /// moved up to these rather than left on a setting the page no longer even lists.</summary>
+    public const int MinMemoryLimitMb = 100;
+    public const double MinCpuLimitPercent = 2;
+
+    private static void RaiseUnstableLimits(LingstrapSettings s)
+    {
+        if (s.MemoryLimitMb is > 0 and < MinMemoryLimitMb)
+        {
+            Log.Info($"Memory limit {s.MemoryLimitMb} MB is below the stable minimum - using {MinMemoryLimitMb} MB.");
+            s.MemoryLimitMb = MinMemoryLimitMb;
+        }
+
+        if (s.CpuLimitPercent is > 0 and < MinCpuLimitPercent)
+        {
+            Log.Info($"CPU limit {s.CpuLimitPercent}% is below the stable minimum - using {MinCpuLimitPercent}%.");
+            s.CpuLimitPercent = MinCpuLimitPercent;
         }
     }
 
