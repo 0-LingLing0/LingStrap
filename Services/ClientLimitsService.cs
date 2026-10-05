@@ -52,6 +52,13 @@ public static class ClientLimitsService
         public static extern bool SetInformationJobObject(IntPtr job, int infoClass,
             ref JOBOBJECT_CPU_RATE_CONTROL_INFORMATION info, uint length);
 
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern bool SetInformationJobObject(IntPtr job, int infoClass,
+            ref JOBOBJECT_EXTENDED_LIMIT_INFORMATION info, uint length);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern bool IsProcessInJob(IntPtr process, IntPtr job, out bool result);
+
         [DllImport("kernel32.dll")]
         public static extern bool CloseHandle(IntPtr handle);
 
@@ -123,7 +130,7 @@ public static class ClientLimitsService
             while (true)
             {
                 // Re-read every few seconds, so changing a limit in Lingstrap reaches running clients.
-                if (tick++ % 3 == 0) SettingsService.Load();
+                if (tick++ % 3 == 0) SettingsService.Load(quiet: true);
 
                 var clients = RobloxProcesses.Clients();
                 if (clients.Length == 0) break;
@@ -156,10 +163,12 @@ public static class ClientLimitsService
         foreach (var gone in WindowFirstSeen.Keys.Where(id => !alive.Contains(id)).ToList()) WindowFirstSeen.Remove(gone);
         Trimmed.RemoveWhere(id => !alive.Contains(id));
         CpuCapFailed.RemoveWhere(id => !alive.Contains(id));
-        foreach (var gone in CpuJobs.Keys.Where(id => !alive.Contains(id)).ToList())
+
+        // All clients at once, not one by one: a single job can hold several (see ApplyCpu).
+        try { ApplyCpu(clients, s.CpuLimitPercent); }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
-            Native.CloseHandle(CpuJobs[gone].Job);
-            CpuJobs.Remove(gone);
+            // A client exited mid-way - the next pass sorts it out.
         }
 
         if (s.MemoryLimitMb > 0 && DateTime.UtcNow - _lastMemoryReport > TimeSpan.FromMinutes(1))
@@ -179,7 +188,6 @@ public static class ClientLimitsService
             {
                 ApplyCore(client, s.OneCorePerClient, pinned);
                 ApplyMemory(client, s.MemoryLimitMb, s.MemoryBoostMb, limited);
-                ApplyCpu(client, s.CpuLimitPercent);
                 if (s.SmallWindows) ShrinkWindowOf(client);
             }
             catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
@@ -296,67 +304,145 @@ public static class ClientLimitsService
         public uint CpuRate; // 1/100ths of a percent of the whole machine's CPU
     }
 
-    /// <summary>PID -> its job object and the rate set on it (0 = uncapped).</summary>
-    private static readonly Dictionary<int, (IntPtr Job, int Rate)> CpuJobs = new();
+    private const int JobObjectExtendedLimitInformation = 9;
+    private const uint JobObjectLimitSilentBreakawayOk = 0x00001000;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct JOBOBJECT_BASIC_LIMIT_INFORMATION
+    {
+        public long PerProcessUserTimeLimit;
+        public long PerJobUserTimeLimit;
+        public uint LimitFlags;
+        public UIntPtr MinimumWorkingSetSize;
+        public UIntPtr MaximumWorkingSetSize;
+        public uint ActiveProcessLimit;
+        public UIntPtr Affinity;
+        public uint PriorityClass;
+        public uint SchedulingClass;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct IO_COUNTERS
+    {
+        public ulong ReadOperationCount, WriteOperationCount, OtherOperationCount;
+        public ulong ReadTransferCount, WriteTransferCount, OtherTransferCount;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct JOBOBJECT_EXTENDED_LIMIT_INFORMATION
+    {
+        public JOBOBJECT_BASIC_LIMIT_INFORMATION BasicLimitInformation;
+        public IO_COUNTERS IoInfo;
+        public UIntPtr ProcessMemoryLimit;
+        public UIntPtr JobMemoryLimit;
+        public UIntPtr PeakProcessMemoryUsed;
+        public UIntPtr PeakJobMemoryUsed;
+    }
+
+    /// <summary>A job object Lingstrap created to cap a client's CPU, and what it last set on it.</summary>
+    private sealed class CpuJob
+    {
+        public IntPtr Handle;
+        public int Rate = -1;   // 1/100ths of a percent; 0 = uncapped, -1 = never set
+        public int Members;
+    }
+
+    private static readonly List<CpuJob> CpuJobs = new();
     private static readonly HashSet<int> CpuCapFailed = new();
 
     /// <summary>
-    /// Caps the client's CPU with a job object's hard rate limit: Windows itself won't schedule it
-    /// past that share of the machine, whatever the game asks for. One job per client, so each gets
-    /// its own cap. Lifted entirely while the client is "Not Responding" (and BoostRecovery after),
-    /// so a client that fell behind can always catch up instead of being held down until it drops.
+    /// Caps each client's CPU with a job object's hard rate limit: Windows itself won't schedule it
+    /// past that share of the machine, whatever the game asks for. Lifted entirely while a client is
+    /// "Not Responding" (and BoostRecovery after), so one that fell behind can catch up instead of
+    /// being held down until it drops.
+    ///
+    /// Sized per job, not per client. Roblox starts new clients itself (joining a game from inside
+    /// Roblox), and a process started from inside a job lands in that same job - so one job can hold
+    /// several clients, and a fixed per-job cap made them share it: three clients on 1% between them,
+    /// starved until they froze and closed each other. Each job now gets the limit times the number
+    /// of clients in it. The job is also asked to let new processes leave it, which takes them out
+    /// entirely where Windows allows it - but counting doesn't depend on that working.
     /// </summary>
-    private static void ApplyCpu(Process client, double percent)
+    private static void ApplyCpu(Process[] clients, double percent)
     {
-        if (CpuCapFailed.Contains(client.Id)) return;
+        var members = CpuJobs.ToDictionary(j => j, _ => new List<Process>());
 
-        var struggling = percent > 0 && IsStruggling(client);
-        var rate = percent <= 0 || struggling ? 0 : Math.Max(1, (int)Math.Round(percent * 100));
-
-        CpuJobs.TryGetValue(client.Id, out var entry);
-        if (entry.Job == IntPtr.Zero)
+        foreach (var client in clients)
         {
-            if (rate == 0) return; // never capped, nothing to lift
+            if (CpuCapFailed.Contains(client.Id)) continue;
 
-            var job = Native.CreateJobObject(IntPtr.Zero, null);
-            if (job == IntPtr.Zero || !Native.AssignProcessToJobObject(job, client.Handle))
+            var job = CpuJobs.FirstOrDefault(j => Native.IsProcessInJob(client.Handle, j.Handle, out var inJob) && inJob);
+            if (job == null)
             {
-                Log.Warn($"Client limits: could not cap PID {client.Id}'s CPU (Win32 error {Marshal.GetLastWin32Error()}).");
-                if (job != IntPtr.Zero) Native.CloseHandle(job);
-                CpuCapFailed.Add(client.Id);
-                return;
+                if (percent <= 0) continue; // never capped, nothing to do
+                job = CreateCpuJob(client);
+                if (job == null) continue;
+                CpuJobs.Add(job);
+                members[job] = new List<Process>();
             }
-            entry = (job, -1);
+            members[job].Add(client);
         }
 
-        if (entry.Rate == rate) return;
+        foreach (var (job, inJob) in members)
+        {
+            if (inJob.Count == 0)
+            {
+                Native.CloseHandle(job.Handle);
+                CpuJobs.Remove(job);
+                continue;
+            }
 
-        var info = new JOBOBJECT_CPU_RATE_CONTROL_INFORMATION
-        {
-            ControlFlags = rate == 0 ? 0 : CpuRateControlEnable | CpuRateControlHardCap,
-            CpuRate = (uint)rate,
-        };
-        if (!Native.SetInformationJobObject(entry.Job, JobObjectCpuRateControlInformation, ref info,
-                (uint)Marshal.SizeOf<JOBOBJECT_CPU_RATE_CONTROL_INFORMATION>()))
-        {
-            Log.Warn($"Client limits: could not set PID {client.Id}'s CPU cap (Win32 error {Marshal.GetLastWin32Error()}).");
-            return;
+            var struggling = percent > 0 && inJob.Count(IsStruggling) > 0;
+            var rate = percent <= 0 || struggling
+                ? 0
+                : Math.Clamp((int)Math.Round(percent * 100 * inJob.Count), 1, 10000);
+            if (rate == job.Rate && inJob.Count == job.Members) continue;
+
+            var info = new JOBOBJECT_CPU_RATE_CONTROL_INFORMATION
+            {
+                ControlFlags = rate == 0 ? 0 : CpuRateControlEnable | CpuRateControlHardCap,
+                CpuRate = (uint)rate,
+            };
+            var pids = string.Join(", ", inJob.Select(c => c.Id));
+            if (!Native.SetInformationJobObject(job.Handle, JobObjectCpuRateControlInformation, ref info,
+                    (uint)Marshal.SizeOf<JOBOBJECT_CPU_RATE_CONTROL_INFORMATION>()))
+            {
+                Log.Warn($"Client limits: could not set the CPU cap for PID {pids} (Win32 error {Marshal.GetLastWin32Error()}).");
+                continue;
+            }
+
+            Log.Info(rate == 0
+                ? struggling
+                    ? $"Client limits: PID {pids} not responding - CPU cap lifted until it recovers."
+                    : $"Client limits: CPU cap removed from PID {pids}."
+                : inJob.Count == 1
+                    ? $"Client limits: PID {pids} capped at {percent}% CPU."
+                    : $"Client limits: PID {pids} share one cap (Roblox started them from one another) - set to {rate / 100.0}%, {percent}% each.");
+
+            job.Rate = rate;
+            job.Members = inJob.Count;
         }
-
-        if (rate > 0 && entry.Rate <= 0)
-            Log.Info(entry.Rate == -1
-                ? $"Client limits: PID {client.Id} capped at {percent}% CPU."
-                : $"Client limits: PID {client.Id} is responding again - CPU cap back to {percent}%.");
-        else if (rate == 0)
-            Log.Info(struggling
-                ? $"Client limits: PID {client.Id} is not responding - CPU cap lifted until it recovers."
-                : $"Client limits: CPU cap removed from PID {client.Id}.");
-        else
-            Log.Info($"Client limits: PID {client.Id} CPU cap changed to {percent}%.");
-
-        CpuJobs[client.Id] = (entry.Job, rate);
     }
 
+    private static CpuJob? CreateCpuJob(Process client)
+    {
+        var handle = Native.CreateJobObject(IntPtr.Zero, null);
+        if (handle != IntPtr.Zero)
+        {
+            var limits = new JOBOBJECT_EXTENDED_LIMIT_INFORMATION();
+            limits.BasicLimitInformation.LimitFlags = JobObjectLimitSilentBreakawayOk;
+            Native.SetInformationJobObject(handle, JobObjectExtendedLimitInformation, ref limits,
+                (uint)Marshal.SizeOf<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>()); // best effort, see ApplyCpu
+
+            if (Native.AssignProcessToJobObject(handle, client.Handle))
+                return new CpuJob { Handle = handle };
+        }
+
+        Log.Warn($"Client limits: could not cap PID {client.Id}'s CPU (Win32 error {Marshal.GetLastWin32Error()}).");
+        if (handle != IntPtr.Zero) Native.CloseHandle(handle);
+        CpuCapFailed.Add(client.Id);
+        return null;
+    }
     private static void ApplyMemory(Process client, int limitMb, int boostMb, Dictionary<int, int> limited)
     {
         if (limitMb <= 0)

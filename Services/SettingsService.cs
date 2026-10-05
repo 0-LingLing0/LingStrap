@@ -19,7 +19,9 @@ public static class SettingsService
 
     private static string BackupFile => Paths.SettingsFile + ".bak";
 
-    public static void Load()
+    /// <param name="quiet">For the watcher that re-reads settings every few seconds - skips the
+    /// "Settings loaded" line, which otherwise filled its log every 9 seconds for hours.</param>
+    public static void Load(bool quiet = false)
     {
         try
         {
@@ -32,7 +34,7 @@ public static class SettingsService
             }
 
             Current = TryLoadFrom(Paths.SettingsFile) ?? TryLoadFromBackup() ?? new LingstrapSettings();
-            Log.Info($"Settings loaded. Preset={Current.ActivePreset}, custom flags={Current.CustomFlags.Count}");
+            if (!quiet) Log.Info($"Settings loaded. Preset={Current.ActivePreset}, custom flags={Current.CustomFlags.Count}");
 
             // In memory only, no save: the watcher processes load settings too, and only the main
             // app may write the file. The corrected value is saved the next time it saves anything.
