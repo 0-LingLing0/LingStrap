@@ -65,7 +65,8 @@ public static class SettingsService
 
     private static void RaiseUnstableLimits(LingstrapSettings s)
     {
-        if (s.MemoryLimitMb is > 0 and < MinMemoryLimitMb)
+        // 1 MB is offered on purpose, as a novelty - the user picked it knowing it's unplayable.
+        if (s.MemoryLimitMb is > 1 and < MinMemoryLimitMb)
         {
             Log.Info($"Memory limit {s.MemoryLimitMb} MB is below the stable minimum - using {MinMemoryLimitMb} MB.");
             s.MemoryLimitMb = MinMemoryLimitMb;

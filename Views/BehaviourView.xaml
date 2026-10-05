@@ -80,6 +80,7 @@
                               Description="Caps how much RAM each Roblox window keeps; the rest moves to the page file on disk. Nothing crashes, but a game you play yourself will stutter - meant for AFK accounts. Applies 45 seconds after a window opens, so joining stays quick.">
                     <ComboBox x:Name="MemoryLimitCombo" MinWidth="130" SelectionChanged="Limits_Changed">
                         <ComboBoxItem Content="Off" Tag="0" />
+                        <ComboBoxItem Content="1 MB (just for fun - Roblox will crawl)" Tag="1" />
                         <ComboBoxItem Content="100 MB" Tag="100" />
                         <ComboBoxItem Content="150 MB" Tag="150" />
                         <ComboBoxItem Content="200 MB" Tag="200" />
