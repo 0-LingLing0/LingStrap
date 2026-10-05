@@ -44,7 +44,10 @@ public static class MonitorService
         try
         {
             Native.ShowWindow(hwnd, SW_RESTORE);
-            Native.MoveWindow(hwnd, target.Bounds.X, target.Bounds.Y, target.Bounds.Width, target.Bounds.Height, true);
+            // With Small windows on, only move it there - filling the monitor would just be undone
+            // a moment later by ClientLimitsService shrinking it again.
+            var (width, height) = SettingsService.Current.SmallWindows ? (1, 1) : (target.Bounds.Width, target.Bounds.Height);
+            Native.MoveWindow(hwnd, target.Bounds.X, target.Bounds.Y, width, height, true);
             Log.Info($"Moved Roblox to preferred monitor {deviceName} ({target.Bounds.Width}x{target.Bounds.Height} at {target.Bounds.X},{target.Bounds.Y}).");
         }
         catch (Exception ex)

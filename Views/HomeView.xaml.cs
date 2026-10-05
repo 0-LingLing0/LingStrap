@@ -45,7 +45,8 @@ public partial class HomeView : Page
         {
             Preset.BestQuality     => SymbolRegular.Star24,
             Preset.BestPerformance => SymbolRegular.Rocket24,
-            _                      => SymbolRegular.Scales24,
+            Preset.Afk             => SymbolRegular.WeatherMoon24,
+            _                     => SymbolRegular.Scales24,
         };
         PresetText.Text = PresetInfo.Name(s.ActivePreset);
         PresetDesc.Text = PresetInfo.Description(s.ActivePreset);

@@ -37,26 +37,38 @@ public static class PowerThrottlingService
     }
 
     /// <summary>Tells Windows to never place this process into its power-saving EcoQoS state.</summary>
-    public static void DisableThrottling(Process process)
+    public static void DisableThrottling(Process process) => Set(process, on: false);
+
+    /// <summary>
+    /// The opposite, for when using as little power as possible IS the point (the AFK preset): puts
+    /// the process into EcoQoS - "Efficiency mode" in Task Manager - so Windows runs it on its most
+    /// power-efficient cores and clock speeds.
+    /// </summary>
+    public static void EnableThrottling(Process process) => Set(process, on: true);
+
+    private static void Set(Process process, bool on)
     {
+        var what = on ? "enable" : "disable";
         try
         {
             var state = new PROCESS_POWER_THROTTLING_STATE
             {
                 Version = CurrentVersion,
                 ControlMask = ExecutionSpeed,
-                StateMask = 0, // explicitly off, not "let the system decide"
+                StateMask = on ? ExecutionSpeed : 0, // explicit either way, not "let the system decide"
             };
 
             var size = (uint)Marshal.SizeOf<PROCESS_POWER_THROTTLING_STATE>();
             if (Native.SetProcessInformation(process.Handle, ProcessPowerThrottlingClass, ref state, size))
-                Log.Info($"Disabled power throttling for PID {process.Id} (Roblox will not be put into EcoQoS/efficiency mode).");
+                Log.Info(on
+                    ? $"Put PID {process.Id} into efficiency mode (EcoQoS) to save power."
+                    : $"Disabled power throttling for PID {process.Id} (Roblox will not be put into EcoQoS/efficiency mode).");
             else
-                Log.Warn($"Could not disable power throttling for PID {process.Id}: Win32 error {Marshal.GetLastWin32Error()}");
+                Log.Warn($"Could not {what} power throttling for PID {process.Id}: Win32 error {Marshal.GetLastWin32Error()}");
         }
         catch (Exception ex)
         {
-            Log.Warn($"Could not disable power throttling for PID {process.Id}: {ex.Message}");
+            Log.Warn($"Could not {what} power throttling for PID {process.Id}: {ex.Message}");
         }
     }
 }

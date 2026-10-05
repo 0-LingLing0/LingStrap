@@ -9,7 +9,10 @@ public class PresetSpec
 {
     public required Dictionary<string, string> Flags { get; init; }
     public required Dictionary<string, GbsFieldValue> GbsFields { get; init; }
-    public required string Priority { get; init; }   // Normal | AboveNormal | High
+    public required string Priority { get; init; }   // Low | BelowNormal | Normal | AboveNormal | High
+    public bool OneCorePerClient { get; init; }
+    public int MemoryLimitMb { get; init; }
+    public bool SmallWindows { get; init; }
 }
 
 /// <summary>The exact FastFlag/GBS/priority values each built-in preset applies.</summary>
@@ -38,6 +41,33 @@ public static class PresetCatalog
     public static readonly IReadOnlyList<string> ManagedGbsFields = new[]
     {
         "SavedQualityLevel", "MaxQualityEnabled", "VignetteEnabled", "ReducedMotion", "FramerateCap",
+    };
+
+    /// <summary>
+    /// Roblox's own in-game settings the AFK preset also switches off: sound, fullscreen, the HUD
+    /// overlays, profilers and the like - nothing an unattended farming client needs. Kept out of
+    /// ManagedGbsFields on purpose: those get cleared back to Roblox's defaults whenever a preset
+    /// changes, which would reset someone's volume or chat just for switching between Balanced and
+    /// Best Quality. PresetService snapshots these before AFK applies and puts them back after.
+    /// </summary>
+    public static readonly IReadOnlyDictionary<string, GbsFieldValue> AfkExtraGbsFields = new Dictionary<string, GbsFieldValue>
+    {
+        ["GraphicsQualityLevel"] = new("int", "1"),
+        ["MasterVolume"] = new("float", "0"),
+        ["VoiceChatVolume"] = new("float", "0"),
+        ["PartyVoiceVolume"] = new("float", "0"),
+        ["Fullscreen"] = new("bool", "false"),
+        ["StartMaximized"] = new("bool", "false"),
+        ["ChatVisible"] = new("bool", "false"),
+        ["PlayerListVisible"] = new("bool", "false"),
+        ["PlayerNamesEnabled"] = new("bool", "false"),
+        ["BadgeVisible"] = new("bool", "false"),
+        ["PerformanceStatsVisible"] = new("bool", "false"),
+        ["OnScreenProfilerEnabled"] = new("bool", "false"),
+        ["MicroProfilerWebServerEnabled"] = new("bool", "false"),
+        ["ChatTranslationEnabled"] = new("bool", "false"),
+        ["HapticStrength"] = new("float", "0"),
+        ["ReadAloud"] = new("bool", "false"),
     };
 
     public static PresetSpec Get(Preset preset) => preset switch
@@ -136,6 +166,43 @@ public static class PresetCatalog
                 ["FramerateCap"] = new("int", "9999"),
             },
             Priority = "AboveNormal",
+        },
+
+        Preset.Afk => new PresetSpec
+        {
+            // Best Performance's lowest-everything flags; the difference is the frame cap and priority.
+            Flags = new Dictionary<string, string>
+            {
+                ["DFIntDebugFRMQualityLevelOverride"] = "1",
+                ["DFFlagTextureQualityOverrideEnabled"] = "true",
+                ["DFIntTextureQualityOverride"] = "0",
+                ["FIntDebugForceMSAASamples"] = "0",
+                ["FIntFRMMinGrassDistance"] = "0",
+                ["FIntFRMMaxGrassDistance"] = "0",
+                ["FIntGrassMovementReducedMotionFactor"] = "0",
+                ["DFFlagDebugPauseVoxelizer"] = "true",
+                ["FFlagDebugSkyGray"] = "true",
+                ["DFFlagDisableDPIScale"] = "true",
+                ["DFIntCSGLevelOfDetailSwitchingDistance"] = "0",
+                ["DFIntCSGLevelOfDetailSwitchingDistanceL12"] = "0",
+                ["DFIntCSGLevelOfDetailSwitchingDistanceL23"] = "0",
+                ["DFIntCSGLevelOfDetailSwitchingDistanceL34"] = "0",
+            },
+            GbsFields = new Dictionary<string, GbsFieldValue>
+            {
+                ["SavedQualityLevel"] = new("token", "1"),
+                ["MaxQualityEnabled"] = new("bool", "false"),
+                ["VignetteEnabled"] = new("bool", "false"),
+                ["ReducedMotion"] = new("bool", "true"),
+                // Rendering is most of what an idle client costs, so frames are the big saving.
+                ["FramerateCap"] = new("int", "3"),
+            },
+            // Low also puts each client into Windows' efficiency mode - see LauncherService.
+            Priority = "Low",
+            // Sized for ~15 clients on an 8 GB PC: 15 x 300 MB leaves Windows its few GB.
+            OneCorePerClient = true,
+            MemoryLimitMb = 300,
+            SmallWindows = true,
         },
 
         _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, "Custom has no fixed preset spec."),

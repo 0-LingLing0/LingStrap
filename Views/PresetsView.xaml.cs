@@ -118,6 +118,7 @@ public partial class PresetsView : Page
         Highlight(TileQuality, savedId == null && p == Preset.BestQuality);
         Highlight(TileBalanced, savedId == null && p == Preset.Balanced);
         Highlight(TilePerformance, savedId == null && p == Preset.BestPerformance);
+        Highlight(TileAfk, savedId == null && p == Preset.Afk);
     }
 
     private static void Highlight(CardAction tile, bool active)

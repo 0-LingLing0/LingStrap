@@ -181,7 +181,12 @@ public static class LauncherService
                 }
 
                 ApplyPriority(process);
-                PowerThrottlingService.DisableThrottling(process);
+                // Low priority means "use as little as possible" (the AFK preset), so that's the one
+                // case to ask Windows for efficiency mode instead of keeping Roblox out of it.
+                if (SettingsService.Current.ProcessPriority == "Low")
+                    PowerThrottlingService.EnableThrottling(process);
+                else
+                    PowerThrottlingService.DisableThrottling(process);
                 WireDiscordExit(process);
 
                 Log.Info($"Launched Roblox from {playerExe}" + (attempt > 1 ? $" (retry {attempt - 1})" : ""));
@@ -296,7 +301,24 @@ public static class LauncherService
                 return false;
             }
 
+            // Roblox starts its crash handler itself, as it opens - so the close before launch above
+            // only ever caught the PREVIOUS client's handler, and the first account's always survived.
+            // Close it now the client is up, and keep checking briefly in case it starts a bit later.
+            if (SettingsService.Current.CloseCrashHandler)
+            {
+                KillCrashHandler();
+                _ = Task.Run(async () =>
+                {
+                    for (var i = 0; i < 5; i++)
+                    {
+                        await Task.Delay(2000);
+                        KillCrashHandler();
+                    }
+                });
+            }
+
             CompanionAppService.OnRobloxStarted();
+            ClientLimitsService.OnRobloxStarted();
             DiscordPresenceService.OnRobloxStarted();
             ActivityCoordinator.OnRobloxStarted();
             FpsOverlayCoordinator.OnRobloxStarted();
@@ -763,6 +785,8 @@ public static class LauncherService
         {
             "High"        => ProcessPriorityClass.High,
             "AboveNormal" => ProcessPriorityClass.AboveNormal,
+            "BelowNormal" => ProcessPriorityClass.BelowNormal,
+            "Low"         => ProcessPriorityClass.Idle,
             _             => ProcessPriorityClass.Normal,
         };
         if (priorityClass == ProcessPriorityClass.Normal) return;
@@ -796,8 +820,15 @@ public static class LauncherService
     {
         foreach (var proc in Process.GetProcessesByName("RobloxCrashHandler"))
         {
-            try { proc.Kill(); }
-            catch (Exception ex) { Log.Warn($"Could not close RobloxCrashHandler: {ex.Message}"); }
+            using (proc)
+            {
+                try
+                {
+                    proc.Kill();
+                    Log.Info($"Closed RobloxCrashHandler (PID {proc.Id}).");
+                }
+                catch (Exception ex) { Log.Warn($"Could not close RobloxCrashHandler: {ex.Message}"); }
+            }
         }
     }
 }

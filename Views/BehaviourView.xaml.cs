@@ -27,6 +27,10 @@ public partial class BehaviourView : Page
         ChkReopenOnClose.IsChecked  = s.ReopenLingstrapOnRobloxClose;
         ChkLoadingScreen.IsChecked  = s.ShowLoadingScreen;
         ChkPinCores.IsChecked       = s.PinClientsToCores;
+        ChkOneCore.IsChecked        = s.OneCorePerClient;
+        ChkSmallWindows.IsChecked   = s.SmallWindows;
+        MemoryLimitCombo.SelectedItem = MemoryLimitCombo.Items.Cast<ComboBoxItem>()
+            .FirstOrDefault(i => (string)i.Tag == s.MemoryLimitMb.ToString()) ?? MemoryLimitCombo.Items[0];
         ChkServerLocation.IsChecked = s.ShowServerLocation;
         ChkNotification.IsChecked   = s.ShowServerNotification;
         ChkDiscord.IsChecked        = s.DiscordRichPresence;
@@ -40,6 +44,8 @@ public partial class BehaviourView : Page
         {
             "High"        => 2,
             "AboveNormal" => 1,
+            "BelowNormal" => 3,
+            "Low"         => 4,
             _             => 0,
         };
 
@@ -223,6 +229,23 @@ public partial class BehaviourView : Page
         e.Handled = true;
     }
 
+    private void Limits_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+
+        var s = SettingsService.Current;
+        s.OneCorePerClient = ChkOneCore.IsChecked == true;
+        s.SmallWindows = ChkSmallWindows.IsChecked == true;
+        s.MemoryLimitMb = MemoryLimitCombo.SelectedItem is ComboBoxItem { Tag: string tag } && int.TryParse(tag, out var mb) ? mb : 0;
+        PresetService.MarkCustom();
+        SettingsService.Save();
+
+        // A running watcher picks the change up by itself; with none running (the limits were off
+        // when Roblox started), start one so this reaches the clients that are open right now.
+        if (ClientLimitsService.AnyLimitOn && System.Diagnostics.Process.GetProcessesByName("RobloxPlayerBeta").Length > 0)
+            ClientLimitsService.OnRobloxStarted();
+    }
+
     private void PriorityCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_loading) return;
@@ -231,6 +254,8 @@ public partial class BehaviourView : Page
         {
             2 => "High",
             1 => "AboveNormal",
+            3 => "BelowNormal",
+            4 => "Low",
             _ => "Normal",
         };
         PresetService.MarkCustom();

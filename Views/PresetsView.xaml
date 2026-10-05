@@ -36,13 +36,24 @@
                     </StackPanel>
                 </ui:CardAction>
 
-                <ui:CardAction x:Name="TilePerformance" Tag="BestPerformance" Click="Preset_Click" Margin="0,0,0,20">
+                <ui:CardAction x:Name="TilePerformance" Tag="BestPerformance" Click="Preset_Click" Margin="0,0,0,8">
                     <ui:CardAction.Icon>
                         <ui:SymbolIcon Symbol="Rocket24" />
                     </ui:CardAction.Icon>
                     <StackPanel>
                         <TextBlock Text="Best Performance" FontWeight="SemiBold" FontSize="15" />
                         <TextBlock Text="Frames over looks. Effects off, FPS uncapped."
+                                   FontSize="12" Opacity="0.7" Margin="0,3,0,0" />
+                    </StackPanel>
+                </ui:CardAction>
+
+                <ui:CardAction x:Name="TileAfk" Tag="Afk" Click="Preset_Click" Margin="0,0,0,20">
+                    <ui:CardAction.Icon>
+                        <ui:SymbolIcon Symbol="WeatherMoon24" />
+                    </ui:CardAction.Icon>
+                    <StackPanel>
+                        <TextBlock Text="AFK" FontWeight="SemiBold" FontSize="15" />
+                        <TextBlock Text="Least power for idling on many accounts. 3 FPS, lowest graphics, low priority."
                                    FontSize="12" Opacity="0.7" Margin="0,3,0,0" />
                     </StackPanel>
                 </ui:CardAction>

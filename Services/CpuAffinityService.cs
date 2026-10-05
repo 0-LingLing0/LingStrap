@@ -45,6 +45,9 @@ public static class CpuAffinityService
     private static void Reevaluate()
     {
         if (!SettingsService.Current.PinClientsToCores) return;
+        // One core per client is the stricter version of this, done by ClientLimitsService - both
+        // setting affinity every few seconds would just fight over it.
+        if (SettingsService.Current.OneCorePerClient) return;
 
         lock (Lock)
         {

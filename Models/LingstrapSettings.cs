@@ -120,6 +120,20 @@ public class LingstrapSettings
     /// running client. Retried after every launch that opens its own window.</summary>
     public List<string> VersionFoldersToRemove { get; set; } = new();
 
+    /// <summary>What the AFK preset's extra Roblox settings (PresetCatalog.AfkExtraGbsFields) were
+    /// before it switched them off - null for one that wasn't in the file. Put back, then emptied,
+    /// when another preset is applied.</summary>
+    public Dictionary<string, GbsFieldValue?> AfkSavedGbs { get; set; } = new();
+
+    /// <summary>Lock every Roblox client to a single logical CPU (ClientLimitsService).</summary>
+    public bool OneCorePerClient { get; set; }
+
+    /// <summary>Hard cap on each Roblox client's resident RAM in MB, 0 for none (ClientLimitsService).</summary>
+    public int MemoryLimitMb { get; set; }
+
+    /// <summary>Shrink every Roblox window to the smallest size Roblox allows (ClientLimitsService).</summary>
+    public bool SmallWindows { get; set; }
+
     /// <summary>Keeps GlobalBasicSettings_13.xml read-only so Roblox can't overwrite it on exit.
     /// Re-applied every launch, since Roblox recreates the file if it's ever deleted.</summary>
     public bool LockGlobalSettings { get; set; }

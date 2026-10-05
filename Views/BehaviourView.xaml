@@ -37,6 +37,8 @@
                         <ComboBoxItem Content="Normal" />
                         <ComboBoxItem Content="Above Normal" />
                         <ComboBoxItem Content="High" />
+                        <ComboBoxItem Content="Below Normal" />
+                        <ComboBoxItem Content="Low (also turns on efficiency mode)" />
                     </ComboBox>
                 </v:SettingRow>
 
@@ -62,6 +64,30 @@
                 <v:SettingRow Title="Pin clients to separate cores"
                               Description="Only matters with multi-instance. A single client always gets every core - never pinned.">
                     <ui:ToggleSwitch x:Name="ChkPinCores" Checked="Setting_Changed" Unchecked="Setting_Changed" />
+                </v:SettingRow>
+
+                <v:SettingRow Title="One core per account"
+                              Description="Locks every Roblox window to a single CPU thread, so many accounts at once can't take over your whole CPU. Part of the AFK preset.">
+                    <ui:ToggleSwitch x:Name="ChkOneCore" Checked="Limits_Changed" Unchecked="Limits_Changed" />
+                </v:SettingRow>
+
+                <v:SettingRow Title="Small windows"
+                              Description="Shrinks every Roblox window to the smallest size Roblox allows - fewer pixels to draw. You can still enlarge one by hand after it's opened. Part of the AFK preset.">
+                    <ui:ToggleSwitch x:Name="ChkSmallWindows" Checked="Limits_Changed" Unchecked="Limits_Changed" />
+                </v:SettingRow>
+
+                <v:SettingRow Title="Memory limit per account"
+                              Description="Caps how much RAM each Roblox window keeps; the rest moves to the page file on disk. Nothing crashes, but a game you play yourself will stutter - meant for AFK accounts. Applies 45 seconds after a window opens, so joining stays quick.">
+                    <ComboBox x:Name="MemoryLimitCombo" MinWidth="130" SelectionChanged="Limits_Changed">
+                        <ComboBoxItem Content="Off" Tag="0" />
+                        <ComboBoxItem Content="100 MB" Tag="100" />
+                        <ComboBoxItem Content="200 MB" Tag="200" />
+                        <ComboBoxItem Content="300 MB" Tag="300" />
+                        <ComboBoxItem Content="500 MB" Tag="500" />
+                        <ComboBoxItem Content="750 MB" Tag="750" />
+                        <ComboBoxItem Content="1 GB" Tag="1024" />
+                        <ComboBoxItem Content="1.5 GB" Tag="1536" />
+                    </ComboBox>
                 </v:SettingRow>
 
                 <Border x:Name="CpuPinningCard" Visibility="Collapsed" Padding="16,13,16,13"

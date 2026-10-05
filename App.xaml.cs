@@ -173,6 +173,14 @@ public partial class App : Application
             return;
         }
 
+        if (LaunchArgs.Length > 0 && LaunchArgs[0].Equals("-limitswatcher", StringComparison.OrdinalIgnoreCase))
+        {
+            _isWatcherMode = true;
+            ClientLimitsService.RunWatcherAndBlock();
+            Shutdown();
+            return;
+        }
+
         if (LaunchArgs.Length > 0 && LaunchArgs[0].Equals("-reopenwatcher", StringComparison.OrdinalIgnoreCase))
         {
             _isWatcherMode = true;

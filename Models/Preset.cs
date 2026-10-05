@@ -6,7 +6,8 @@ public enum Preset
     BestQuality,
     Balanced,
     BestPerformance,
-    Custom
+    Custom,
+    Afk, // after Custom so existing values keep their meaning
 }
 
 public static class PresetInfo
@@ -16,6 +17,7 @@ public static class PresetInfo
         Preset.BestQuality     => "Best Quality",
         Preset.Balanced        => "Balanced",
         Preset.BestPerformance => "Best Performance",
+        Preset.Afk             => "AFK",
         _                      => "Custom"
     };
 
@@ -27,6 +29,8 @@ public static class PresetInfo
             "Sensible middle. Game still looks normal, expensive effects are stripped.",
         Preset.BestPerformance =>
             "Frames over looks. Effects off, lowest render distance, FPS uncapped.",
+        Preset.Afk =>
+            "For idling or farming on many accounts. 3 FPS, lowest graphics, low priority and Windows efficiency mode - as little power as possible.",
         _ =>
             "Your own mix. Changing any flag or setting by hand puts you here."
     };

@@ -21,6 +21,9 @@ public static class PresetService
 
         var spec = PresetCatalog.Get(preset);
 
+        if (preset == Preset.Afk) EnterAfkExtras(s);
+        else LeaveAfkExtras(s);
+
         // Clear every flag any preset could have written, then lay this one's down -
         // otherwise a flag from the previous preset that this one omits would linger.
         s.CustomFlags.RemoveAll(f => PresetCatalog.ManagedFlagNames.Contains(f.Name));
@@ -34,6 +37,9 @@ public static class PresetService
             GlobalBasicSettingsService.WriteScalar(name, field.Tag, field.Value);
 
         s.ProcessPriority = spec.Priority;
+        s.OneCorePerClient = spec.OneCorePerClient;
+        s.MemoryLimitMb = spec.MemoryLimitMb;
+        s.SmallWindows = spec.SmallWindows;
         s.ActivePreset = preset;
         SettingsService.Save();
 
@@ -102,6 +108,7 @@ public static class PresetService
     public static void ApplySaved(SavedPreset preset)
     {
         var s = SettingsService.Current;
+        LeaveAfkExtras(s);
 
         foreach (var flag in s.CustomFlags)
         {
@@ -127,11 +134,48 @@ public static class PresetService
             GlobalBasicSettingsService.WriteScalar(name, field.Tag, field.Value);
 
         s.ProcessPriority = preset.Priority;
+        // Saved presets don't record the AFK limits; leaving them on would make a normal setup stutter.
+        s.OneCorePerClient = false;
+        s.MemoryLimitMb = 0;
+        s.SmallWindows = false;
         s.ActivePreset = Preset.Custom;
         s.ActiveSavedPresetId = preset.Id;
         SettingsService.Save();
 
         Log.Info($"Applied saved preset \"{preset.Name}\".");
+    }
+
+    /// <summary>Switches off Roblox's own settings an AFK client doesn't need, remembering each one's
+    /// value first. Applying AFK again while it's already on keeps the original snapshot - otherwise
+    /// the second time would record the switched-off values as the ones to go back to.</summary>
+    private static void EnterAfkExtras(LingstrapSettings s)
+    {
+        if (s.AfkSavedGbs.Count == 0)
+        {
+            foreach (var name in PresetCatalog.AfkExtraGbsFields.Keys)
+            {
+                var field = GlobalBasicSettingsService.GetField(name);
+                s.AfkSavedGbs[name] = field?.RawValue != null ? new GbsFieldValue(field.Tag, field.RawValue) : null;
+            }
+        }
+
+        foreach (var (name, field) in PresetCatalog.AfkExtraGbsFields)
+            GlobalBasicSettingsService.WriteScalar(name, field.Tag, field.Value);
+    }
+
+    /// <summary>Puts back what EnterAfkExtras switched off. A no-op unless AFK was the last preset.</summary>
+    private static void LeaveAfkExtras(LingstrapSettings s)
+    {
+        if (s.AfkSavedGbs.Count == 0) return;
+
+        foreach (var (name, original) in s.AfkSavedGbs)
+        {
+            if (original == null) GlobalBasicSettingsService.RemoveFields(new[] { name });
+            else GlobalBasicSettingsService.WriteScalar(name, original.Tag, original.Value);
+        }
+
+        s.AfkSavedGbs.Clear();
+        Log.Info("Restored the Roblox settings the AFK preset had switched off.");
     }
 
     public static void DeleteSaved(string id)
