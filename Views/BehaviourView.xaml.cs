@@ -234,11 +234,32 @@ public partial class BehaviourView : Page
         e.Handled = true;
     }
 
-    private void Limits_Changed(object sender, RoutedEventArgs e)
+    private async void Limits_Changed(object sender, RoutedEventArgs e)
     {
         if (_loading) return;
 
         var s = SettingsService.Current;
+
+        // The 1 MB novelty limit gets a warning before it's taken: it's offered for fun, not use.
+        if (ReferenceEquals(sender, MemoryLimitCombo)
+            && MemoryLimitCombo.SelectedItem is ComboBoxItem { Tag: "1" }
+            && s.MemoryLimitMb != 1)
+        {
+            var sure = await DialogHelper.ShowConfirmAsync(this,
+                "A 1 MB memory limit is not smart to use and really unstable. Roblox will barely move, " +
+                "keep going \"Not Responding\" and can disconnect or crash. It's only here for fun - " +
+                "don't use it on accounts you're farming with.",
+                "Really use 1 MB?", confirmText: "Use it anyway");
+            if (!sure)
+            {
+                _loading = true;
+                MemoryLimitCombo.SelectedItem = MemoryLimitCombo.Items.Cast<ComboBoxItem>()
+                    .FirstOrDefault(i => (string)i.Tag == s.MemoryLimitMb.ToString()) ?? MemoryLimitCombo.Items[0];
+                _loading = false;
+                return;
+            }
+        }
+
         s.OneCorePerClient = ChkOneCore.IsChecked == true;
         s.SmallWindows = ChkSmallWindows.IsChecked == true;
         s.MemoryLimitMb = MemoryLimitCombo.SelectedItem is ComboBoxItem { Tag: string tag } && int.TryParse(tag, out var mb) ? mb : 0;
