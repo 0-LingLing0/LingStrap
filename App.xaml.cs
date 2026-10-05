@@ -335,11 +335,12 @@ public partial class App : Application
             return;
         }
 
-        // Failed - the dialog already showed the error and stays open on its own (or, if the loading
-        // screen is off, there was nothing to show) - bring up the main window so the user isn't left
-        // with nothing to act on.
-        var window = new MainWindow();
-        window.Show();
+        // Didn't complete - the loading screen was closed, Roblox crashed while starting, or it was
+        // closed before its window appeared. Everything closes: the main window used to open here,
+        // putting Lingstrap's settings in front of someone who'd just closed Roblox or the launch
+        // themselves. Why it failed is in the log.
+        Log.Info("Launch didn't complete - exiting without opening Lingstrap.");
+        Shutdown();
     }
 
     private static string? _lastUnhandledText;
