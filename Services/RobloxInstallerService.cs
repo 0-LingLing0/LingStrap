@@ -45,7 +45,7 @@ public static class RobloxInstallerService
         if (versionFolders.Count == 0) return false;
 
         // Can't delete files a running client still has open.
-        foreach (var proc in Process.GetProcessesByName("RobloxPlayerBeta"))
+        foreach (var proc in RobloxProcesses.Clients())
         {
             try { proc.Kill(); }
             catch (Exception ex) { Log.Warn($"Could not close a running Roblox client before reinstalling: {ex.Message}"); }

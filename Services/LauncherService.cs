@@ -119,7 +119,7 @@ public static class LauncherService
                 // already running from this exact install (multi-instance), that restore-then-reapply
                 // would briefly swap out content files the running client may still have open, for no
                 // benefit: they're already correctly in place from that first launch.
-                if (Process.GetProcessesByName("RobloxPlayerBeta").Length == 0)
+                if (RobloxProcesses.Count() == 0)
                 {
                     ModsService.Apply(versionFolder);
                 }
@@ -390,7 +390,9 @@ public static class LauncherService
     {
         var root = Path.GetFullPath(versionFolder).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
 
-        foreach (var client in Process.GetProcessesByName("RobloxPlayerBeta"))
+        // Every session's clients, deliberately - unlike everywhere else. This is about files on disk,
+        // and another RDP login of the same Windows user runs Roblox out of these same folders.
+        foreach (var client in Process.GetProcessesByName(RobloxProcesses.ClientName))
         {
             using (client)
             {
@@ -564,7 +566,7 @@ public static class LauncherService
             return false; // couldn't read it; treat as a normal failure rather than guessing
         }
 
-        foreach (var other in Process.GetProcessesByName("RobloxPlayerBeta"))
+        foreach (var other in RobloxProcesses.Clients())
         {
             try
             {
@@ -806,7 +808,7 @@ public static class LauncherService
             {
                 // With multi-instance on, one client closing doesn't mean Roblox has "closed" -
                 // only stop re-applying and clear the presence once every client has exited.
-                if (Process.GetProcessesByName("RobloxPlayerBeta").Length == 0)
+                if (RobloxProcesses.Count() == 0)
                     DiscordPresenceService.OnRobloxClosed();
             };
         }
@@ -818,7 +820,7 @@ public static class LauncherService
 
     private static void KillCrashHandler()
     {
-        foreach (var proc in Process.GetProcessesByName("RobloxCrashHandler"))
+        foreach (var proc in RobloxProcesses.InSession("RobloxCrashHandler"))
         {
             using (proc)
             {

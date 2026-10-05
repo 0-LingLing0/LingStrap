@@ -84,7 +84,7 @@ public static class CompanionAppService
 
                 // Roblox may have closed during that delay. Launching anyway meant the app opened
                 // after the game was already gone, only for the loop below to close it again at once.
-                if (Process.GetProcessesByName("RobloxPlayerBeta").Length == 0)
+                if (RobloxProcesses.Count() == 0)
                 {
                     Log.Info($"Roblox closed before '{entry.Name}' was due to start - not starting it, or anything after it.");
                     break;
@@ -94,7 +94,7 @@ public static class CompanionAppService
                 if (pid is { } id) launched.Add((id, entry));
             }
 
-            while (Process.GetProcessesByName("RobloxPlayerBeta").Length > 0)
+            while (RobloxProcesses.Count() > 0)
                 Thread.Sleep(2000);
 
             CloseAllTracked(launched);

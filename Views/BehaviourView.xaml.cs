@@ -242,7 +242,7 @@ public partial class BehaviourView : Page
 
         // A running watcher picks the change up by itself; with none running (the limits were off
         // when Roblox started), start one so this reaches the clients that are open right now.
-        if (ClientLimitsService.AnyLimitOn && System.Diagnostics.Process.GetProcessesByName("RobloxPlayerBeta").Length > 0)
+        if (ClientLimitsService.AnyLimitOn && RobloxProcesses.Count() > 0)
             ClientLimitsService.OnRobloxStarted();
     }
 

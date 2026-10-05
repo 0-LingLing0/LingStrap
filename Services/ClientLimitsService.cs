@@ -102,7 +102,7 @@ public static class ClientLimitsService
         try
         {
             var startDeadline = DateTime.UtcNow.AddSeconds(30);
-            while (Process.GetProcessesByName("RobloxPlayerBeta").Length == 0 && DateTime.UtcNow < startDeadline)
+            while (RobloxProcesses.Count() == 0 && DateTime.UtcNow < startDeadline)
                 Thread.Sleep(500);
 
             var tick = 0;
@@ -111,7 +111,7 @@ public static class ClientLimitsService
                 // Re-read every few seconds, so changing a limit in Lingstrap reaches running clients.
                 if (tick++ % 3 == 0) SettingsService.Load();
 
-                var clients = Process.GetProcessesByName("RobloxPlayerBeta");
+                var clients = RobloxProcesses.Clients();
                 if (clients.Length == 0) break;
 
                 try { Enforce(clients, pinned, limited); }

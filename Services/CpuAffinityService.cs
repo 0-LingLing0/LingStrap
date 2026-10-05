@@ -56,7 +56,7 @@ public static class CpuAffinityService
                 Process[] processes;
                 try
                 {
-                    processes = Process.GetProcessesByName("RobloxPlayerBeta")
+                    processes = RobloxProcesses.Clients()
                         .OrderBy(p => SafeStartTime(p))
                         .ToArray();
                 }

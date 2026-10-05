@@ -38,7 +38,7 @@ public static class RobloxWindowLocator
     /// logging) the real, per-client lookup while waiting for it to show up.
     /// </summary>
     public static bool HasAnyReadyClientWindow() =>
-        Process.GetProcessesByName("RobloxPlayerBeta")
+        RobloxProcesses.Clients()
             .Any(p => { try { return p.MainWindowHandle != IntPtr.Zero; } catch { return false; } });
 
     /// <summary>
@@ -53,7 +53,7 @@ public static class RobloxWindowLocator
     /// </summary>
     public static (Rect Rect, IntPtr Hwnd)? FindClientRectForLogFile(string? logFile)
     {
-        var candidates = Process.GetProcessesByName("RobloxPlayerBeta")
+        var candidates = RobloxProcesses.Clients()
             .Select(p => { try { return (Process: p, Handle: p.MainWindowHandle); } catch { return (Process: p, Handle: IntPtr.Zero); } })
             .Where(x => x.Handle != IntPtr.Zero)
             .ToList();

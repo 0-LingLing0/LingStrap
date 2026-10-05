@@ -189,7 +189,7 @@ public static class DiscordPresenceService
 
         StartReapplyTimer();
 
-        while (Process.GetProcessesByName("RobloxPlayerBeta").Length > 0)
+        while (RobloxProcesses.Count() > 0)
             Thread.Sleep(2000);
 
         ActivityWatcherService.Joined -= OnWatcherJoined;

@@ -40,7 +40,7 @@ public static class GlobalBasicSettingsService
     private static readonly object PendingLock = new();
     private static readonly Dictionary<string, PendingEdit> Pending = LoadPending();
 
-    public static bool IsRobloxRunning() => Process.GetProcessesByName("RobloxPlayerBeta").Length > 0;
+    public static bool IsRobloxRunning() => RobloxProcesses.Count() > 0;
     public static bool BackupExists() => File.Exists(FilePath + BackupSuffix);
     public static bool HasPendingEdits { get { lock (PendingLock) return Pending.Count > 0; } }
 

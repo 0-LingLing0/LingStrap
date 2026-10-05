@@ -38,10 +38,10 @@ public static class MultiInstanceWatcher
             // created, right as EnsureWatcherRunning is still polling for them. Wait for at least
             // one Roblox process to actually appear first, THEN watch for them all to close.
             var startDeadline = DateTime.UtcNow.AddSeconds(30);
-            while (Process.GetProcessesByName("RobloxPlayerBeta").Length == 0 && DateTime.UtcNow < startDeadline)
+            while (RobloxProcesses.Count() == 0 && DateTime.UtcNow < startDeadline)
                 Thread.Sleep(500);
 
-            while (Process.GetProcessesByName("RobloxPlayerBeta").Length > 0)
+            while (RobloxProcesses.Count() > 0)
                 Thread.Sleep(3000);
         }
         catch (Exception ex)

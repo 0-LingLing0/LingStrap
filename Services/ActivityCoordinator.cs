@@ -102,7 +102,7 @@ public static class ActivityCoordinator
 
         _exitPollTimer = new Timer(_ =>
         {
-            if (Process.GetProcessesByName("RobloxPlayerBeta").Length > 0) return;
+            if (RobloxProcesses.Count() > 0) return;
 
             _exitPollTimer?.Dispose();
             Stop();

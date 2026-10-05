@@ -76,7 +76,7 @@ public static class ReopenOnCloseService
             return;
         }
 
-        while (Process.GetProcessesByName("RobloxPlayerBeta").Length > 0)
+        while (RobloxProcesses.Count() > 0)
             Thread.Sleep(2000);
 
         LaunchFreshLingstrap();
@@ -98,7 +98,7 @@ public static class ReopenOnCloseService
         _inProcessPollTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
         _inProcessPollTimer.Tick += (_, _) =>
         {
-            if (Process.GetProcessesByName("RobloxPlayerBeta").Length > 0) return;
+            if (RobloxProcesses.Count() > 0) return;
 
             _inProcessPollTimer!.Stop();
             _inProcessPollTimer = null;
