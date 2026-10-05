@@ -40,10 +40,9 @@ public static class ShortcutService
             return false;
 
         var mainExe = Path.Combine(Path.GetDirectoryName(exePath)!, MainExeName);
-        // A macro running the protocol command itself can fill in "%1" with nothing, or leave it in
-        // literally - either way that's "no link", which has to mean "launch Roblox", not an empty
-        // argument that would open the main window after all.
-        var real = args.Where(a => !string.IsNullOrWhiteSpace(a) && a != "%1").ToArray();
+        // An empty argument still means "no link" - it has to launch Roblox, not reach Lingstrap.exe
+        // as an argument it doesn't recognise and open the main window after all.
+        var real = args.Where(a => !string.IsNullOrWhiteSpace(a)).ToArray();
         var forwarded = real.Length > 0 ? real : new[] { LaunchArg };
 
         try

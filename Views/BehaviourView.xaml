@@ -44,12 +44,6 @@
                               Description="A desktop and Start menu shortcut that opens Roblox straight away through Lingstrap, with all your settings applied - no Launch button to press.">
                     <Button Content="Create shortcut" Click="CreateLaunchShortcut_Click" />
                 </v:SettingRow>
-
-                <v:SettingRow Title="Roblox launcher"
-                              Description="Makes Lingstrap the launcher Windows and other programs (like macros) use to open Roblox. Shows the launcher file and copies its path, so you can pick it anywhere that asks for one.">
-                    <Button Content="Set as Roblox launcher" Click="SetAsRobloxLauncher_Click" />
-                </v:SettingRow>
-
                 <v:SettingRow Title="Allow multi-instance launching" ShowDivider="False"
                               Description="Holds Roblox's singleton mutex so more than one client can run. Roblox actively works against this, so it can break at any update.">
                     <ui:ToggleSwitch x:Name="ChkMulti" Checked="Setting_Changed" Unchecked="Setting_Changed" />
