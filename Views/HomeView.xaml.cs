@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -115,6 +116,33 @@ public partial class HomeView : Page
             LaunchButton.IsEnabled = true;
             mainWindow?.Show();
         }
+    }
+
+    private async void CloseStuck_Click(object sender, RoutedEventArgs e)
+    {
+        var stuck = await Task.Run(StuckAccountService.Find);
+        if (stuck.Count == 0)
+        {
+            await DialogHelper.ShowErrorAsync(this, "Every Roblox account is responding normally - nothing to close.", "No stuck accounts");
+            return;
+        }
+
+        var frozen = stuck.Count(s => s.Problem == StuckAccountService.Problem.NotResponding);
+        var ghosts = stuck.Count(s => s.Problem == StuckAccountService.Problem.NoWindow);
+        var handlers = stuck.Count(s => s.Problem == StuckAccountService.Problem.CrashHandler);
+        var parts = new System.Collections.Generic.List<string>();
+        if (frozen > 0) parts.Add($"{frozen} not responding");
+        if (ghosts > 0) parts.Add($"{ghosts} running without a window (left over, can block multi-instance)");
+        if (handlers > 0) parts.Add($"{handlers} crash handler{(handlers == 1 ? "" : "s")}");
+
+        var confirmed = await DialogHelper.ShowConfirmAsync(this,
+            "Found: " + string.Join(", ", parts) + ".\n\nClose them? Accounts that are working normally stay open.",
+            "Close stuck accounts?", confirmText: "Close them");
+        if (!confirmed) return;
+
+        var closed = await Task.Run(() => StuckAccountService.Close(stuck));
+        Refresh();
+        await DialogHelper.ShowErrorAsync(this, $"Closed {closed} of {stuck.Count}.", "Done");
     }
 
     private void OpenFolder_Click(object sender, RoutedEventArgs e)
