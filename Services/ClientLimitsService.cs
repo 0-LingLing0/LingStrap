@@ -42,6 +42,19 @@ public static class ClientLimitsService
         [DllImport("kernel32.dll", SetLastError = true)]
         public static extern bool K32EmptyWorkingSet(IntPtr process);
 
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        public static extern IntPtr CreateJobObject(IntPtr attributes, string? name);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern bool SetInformationJobObject(IntPtr job, int infoClass,
+            ref JOBOBJECT_CPU_RATE_CONTROL_INFORMATION info, uint length);
+
+        [DllImport("kernel32.dll")]
+        public static extern bool CloseHandle(IntPtr handle);
+
         [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
         [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
         [DllImport("user32.dll")] public static extern bool IsHungAppWindow(IntPtr hWnd);
@@ -59,7 +72,7 @@ public static class ClientLimitsService
 
     public static bool AnyLimitOn =>
         SettingsService.Current.OneCorePerClient || SettingsService.Current.MemoryLimitMb > 0
-        || SettingsService.Current.SmallWindows;
+        || SettingsService.Current.SmallWindows || SettingsService.Current.CpuLimitPercent > 0;
 
     /// <summary>Clients whose window has already been shrunk - each one is, exactly once.</summary>
     private static readonly Dictionary<int, DateTime> WindowFirstSeen = new();
@@ -142,6 +155,12 @@ public static class ClientLimitsService
         foreach (var gone in LastNotResponding.Keys.Where(id => !alive.Contains(id)).ToList()) LastNotResponding.Remove(gone);
         foreach (var gone in WindowFirstSeen.Keys.Where(id => !alive.Contains(id)).ToList()) WindowFirstSeen.Remove(gone);
         Trimmed.RemoveWhere(id => !alive.Contains(id));
+        CpuCapFailed.RemoveWhere(id => !alive.Contains(id));
+        foreach (var gone in CpuJobs.Keys.Where(id => !alive.Contains(id)).ToList())
+        {
+            Native.CloseHandle(CpuJobs[gone].Job);
+            CpuJobs.Remove(gone);
+        }
 
         if (s.MemoryLimitMb > 0 && DateTime.UtcNow - _lastMemoryReport > TimeSpan.FromMinutes(1))
         {
@@ -160,6 +179,7 @@ public static class ClientLimitsService
             {
                 ApplyCore(client, s.OneCorePerClient, pinned);
                 ApplyMemory(client, s.MemoryLimitMb, s.MemoryBoostMb, limited);
+                ApplyCpu(client, s.CpuLimitPercent);
                 if (s.SmallWindows) ShrinkWindowOf(client);
             }
             catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
@@ -242,6 +262,19 @@ public static class ClientLimitsService
             return limitMb;
         }
 
+        var boost = IsStruggling(client);
+        if (boost && Boosted.Add(client.Id))
+            Log.Info($"Client limits: PID {client.Id} is not responding - memory cap raised to {boostMb} MB until it recovers.");
+        else if (!boost && Boosted.Remove(client.Id))
+            Log.Info($"Client limits: PID {client.Id} is responding again - memory cap back to {limitMb} MB.");
+
+        return boost ? boostMb : limitMb;
+    }
+
+    /// <summary>Whether the client's window is "Not Responding", or was within BoostRecovery -
+    /// shared by the memory boost and the CPU cap, which both ease off while it is.</summary>
+    private static bool IsStruggling(Process client)
+    {
         client.Refresh();
         var hwnd = client.MainWindowHandle;
         // IsHungAppWindow answers instantly (Windows' own "Not Responding" test), where
@@ -249,13 +282,79 @@ public static class ClientLimitsService
         if (hwnd != IntPtr.Zero && Native.IsHungAppWindow(hwnd))
             LastNotResponding[client.Id] = DateTime.UtcNow;
 
-        var boost = LastNotResponding.TryGetValue(client.Id, out var at) && DateTime.UtcNow - at < BoostRecovery;
-        if (boost && Boosted.Add(client.Id))
-            Log.Info($"Client limits: PID {client.Id} is not responding - memory cap raised to {boostMb} MB until it recovers.");
-        else if (!boost && Boosted.Remove(client.Id))
-            Log.Info($"Client limits: PID {client.Id} is responding again - memory cap back to {limitMb} MB.");
+        return LastNotResponding.TryGetValue(client.Id, out var at) && DateTime.UtcNow - at < BoostRecovery;
+    }
 
-        return boost ? boostMb : limitMb;
+    private const int JobObjectCpuRateControlInformation = 15;
+    private const uint CpuRateControlEnable = 0x1;
+    private const uint CpuRateControlHardCap = 0x4;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct JOBOBJECT_CPU_RATE_CONTROL_INFORMATION
+    {
+        public uint ControlFlags;
+        public uint CpuRate; // 1/100ths of a percent of the whole machine's CPU
+    }
+
+    /// <summary>PID -> its job object and the rate set on it (0 = uncapped).</summary>
+    private static readonly Dictionary<int, (IntPtr Job, int Rate)> CpuJobs = new();
+    private static readonly HashSet<int> CpuCapFailed = new();
+
+    /// <summary>
+    /// Caps the client's CPU with a job object's hard rate limit: Windows itself won't schedule it
+    /// past that share of the machine, whatever the game asks for. One job per client, so each gets
+    /// its own cap. Lifted entirely while the client is "Not Responding" (and BoostRecovery after),
+    /// so a client that fell behind can always catch up instead of being held down until it drops.
+    /// </summary>
+    private static void ApplyCpu(Process client, double percent)
+    {
+        if (CpuCapFailed.Contains(client.Id)) return;
+
+        var struggling = percent > 0 && IsStruggling(client);
+        var rate = percent <= 0 || struggling ? 0 : Math.Max(1, (int)Math.Round(percent * 100));
+
+        CpuJobs.TryGetValue(client.Id, out var entry);
+        if (entry.Job == IntPtr.Zero)
+        {
+            if (rate == 0) return; // never capped, nothing to lift
+
+            var job = Native.CreateJobObject(IntPtr.Zero, null);
+            if (job == IntPtr.Zero || !Native.AssignProcessToJobObject(job, client.Handle))
+            {
+                Log.Warn($"Client limits: could not cap PID {client.Id}'s CPU (Win32 error {Marshal.GetLastWin32Error()}).");
+                if (job != IntPtr.Zero) Native.CloseHandle(job);
+                CpuCapFailed.Add(client.Id);
+                return;
+            }
+            entry = (job, -1);
+        }
+
+        if (entry.Rate == rate) return;
+
+        var info = new JOBOBJECT_CPU_RATE_CONTROL_INFORMATION
+        {
+            ControlFlags = rate == 0 ? 0 : CpuRateControlEnable | CpuRateControlHardCap,
+            CpuRate = (uint)rate,
+        };
+        if (!Native.SetInformationJobObject(entry.Job, JobObjectCpuRateControlInformation, ref info,
+                (uint)Marshal.SizeOf<JOBOBJECT_CPU_RATE_CONTROL_INFORMATION>()))
+        {
+            Log.Warn($"Client limits: could not set PID {client.Id}'s CPU cap (Win32 error {Marshal.GetLastWin32Error()}).");
+            return;
+        }
+
+        if (rate > 0 && entry.Rate <= 0)
+            Log.Info(entry.Rate == -1
+                ? $"Client limits: PID {client.Id} capped at {percent}% CPU."
+                : $"Client limits: PID {client.Id} is responding again - CPU cap back to {percent}%.");
+        else if (rate == 0)
+            Log.Info(struggling
+                ? $"Client limits: PID {client.Id} is not responding - CPU cap lifted until it recovers."
+                : $"Client limits: CPU cap removed from PID {client.Id}.");
+        else
+            Log.Info($"Client limits: PID {client.Id} CPU cap changed to {percent}%.");
+
+        CpuJobs[client.Id] = (entry.Job, rate);
     }
 
     private static void ApplyMemory(Process client, int limitMb, int boostMb, Dictionary<int, int> limited)

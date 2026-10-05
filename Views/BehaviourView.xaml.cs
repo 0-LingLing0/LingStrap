@@ -33,6 +33,9 @@ public partial class BehaviourView : Page
             .FirstOrDefault(i => (string)i.Tag == s.MemoryLimitMb.ToString()) ?? MemoryLimitCombo.Items[0];
         MemoryBoostCombo.SelectedItem = MemoryBoostCombo.Items.Cast<ComboBoxItem>()
             .FirstOrDefault(i => (string)i.Tag == s.MemoryBoostMb.ToString()) ?? MemoryBoostCombo.Items[0];
+        CpuLimitCombo.SelectedItem = CpuLimitCombo.Items.Cast<ComboBoxItem>()
+            .FirstOrDefault(i => double.Parse((string)i.Tag, System.Globalization.CultureInfo.InvariantCulture) == s.CpuLimitPercent)
+            ?? CpuLimitCombo.Items[0];
         ChkServerLocation.IsChecked = s.ShowServerLocation;
         ChkNotification.IsChecked   = s.ShowServerNotification;
         ChkDiscord.IsChecked        = s.DiscordRichPresence;
@@ -240,6 +243,9 @@ public partial class BehaviourView : Page
         s.SmallWindows = ChkSmallWindows.IsChecked == true;
         s.MemoryLimitMb = MemoryLimitCombo.SelectedItem is ComboBoxItem { Tag: string tag } && int.TryParse(tag, out var mb) ? mb : 0;
         s.MemoryBoostMb = MemoryBoostCombo.SelectedItem is ComboBoxItem { Tag: string boostTag } && int.TryParse(boostTag, out var boost) ? boost : 0;
+        s.CpuLimitPercent = CpuLimitCombo.SelectedItem is ComboBoxItem { Tag: string cpuTag }
+            && double.TryParse(cpuTag, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var cpu)
+            ? cpu : 0;
         PresetService.MarkCustom();
         SettingsService.Save();
 

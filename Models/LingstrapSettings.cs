@@ -134,6 +134,10 @@ public class LingstrapSettings
     /// <summary>The cap a client gets instead while its window is "Not Responding", 0 for no boost.</summary>
     public int MemoryBoostMb { get; set; }
 
+    /// <summary>Hard cap on each client's CPU, in percent of the whole machine (as Task Manager shows
+    /// it), 0 for none. Not part of any preset - the right value depends on the game and the PC.</summary>
+    public double CpuLimitPercent { get; set; }
+
     /// <summary>Shrink every Roblox window to the smallest size Roblox allows (ClientLimitsService).</summary>
     public bool SmallWindows { get; set; }
 

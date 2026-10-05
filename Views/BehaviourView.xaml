@@ -91,6 +91,19 @@
                     </ComboBox>
                 </v:SettingRow>
 
+                <v:SettingRow Title="CPU limit per account"
+                              Description="A hard cap on how much CPU each Roblox window may use, in % of your whole CPU (the same number Task Manager shows). Lifted while a window is &quot;Not Responding&quot; so it can catch up. Too low can make accounts lag or disconnect - start around 2% and go down step by step.">
+                    <ComboBox x:Name="CpuLimitCombo" MinWidth="130" SelectionChanged="Limits_Changed">
+                        <ComboBoxItem Content="Off" Tag="0" />
+                        <ComboBoxItem Content="0.5%" Tag="0.5" />
+                        <ComboBoxItem Content="1%" Tag="1" />
+                        <ComboBoxItem Content="1.5%" Tag="1.5" />
+                        <ComboBoxItem Content="2%" Tag="2" />
+                        <ComboBoxItem Content="3%" Tag="3" />
+                        <ComboBoxItem Content="5%" Tag="5" />
+                    </ComboBox>
+                </v:SettingRow>
+
                 <v:SettingRow Title="Memory while not responding"
                               Description="When an account's window shows &quot;Not Responding&quot;, its memory limit goes up to this until it has been responding again for 15 seconds, then drops back. A very low limit can freeze an account while it loads; this gets it moving again.">
                     <ComboBox x:Name="MemoryBoostCombo" MinWidth="130" SelectionChanged="Limits_Changed">
