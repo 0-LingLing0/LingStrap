@@ -44,6 +44,7 @@ public static class ClientLimitsService
 
         [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
         [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
+        [DllImport("user32.dll")] public static extern bool IsHungAppWindow(IntPtr hWnd);
         [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr hWnd);
         [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int cmd);
         [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
@@ -137,6 +138,8 @@ public static class ClientLimitsService
         foreach (var gone in limited.Keys.Where(id => !alive.Contains(id)).ToList()) limited.Remove(gone);
         Reapplied.RemoveWhere(id => !alive.Contains(id));
         ShrinkLogged.RemoveWhere(id => !alive.Contains(id));
+        Boosted.RemoveWhere(id => !alive.Contains(id));
+        foreach (var gone in LastNotResponding.Keys.Where(id => !alive.Contains(id)).ToList()) LastNotResponding.Remove(gone);
         foreach (var gone in WindowFirstSeen.Keys.Where(id => !alive.Contains(id)).ToList()) WindowFirstSeen.Remove(gone);
         Trimmed.RemoveWhere(id => !alive.Contains(id));
 
@@ -156,7 +159,7 @@ public static class ClientLimitsService
             try
             {
                 ApplyCore(client, s.OneCorePerClient, pinned);
-                ApplyMemory(client, s.MemoryLimitMb, limited);
+                ApplyMemory(client, s.MemoryLimitMb, s.MemoryBoostMb, limited);
                 if (s.SmallWindows) ShrinkWindowOf(client);
             }
             catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
@@ -218,7 +221,44 @@ public static class ClientLimitsService
         return order.OrderBy(c => use.GetValueOrDefault(c)).ThenBy(c => order.IndexOf(c)).First();
     }
 
-    private static void ApplyMemory(Process client, int limitMb, Dictionary<int, int> limited)
+    /// <summary>How long a client has to respond normally again before a raised cap drops back -
+    /// without it, a client that stalls on and off would bounce between the two every few seconds.</summary>
+    private static readonly TimeSpan BoostRecovery = TimeSpan.FromSeconds(15);
+
+    private static readonly Dictionary<int, DateTime> LastNotResponding = new();
+    private static readonly HashSet<int> Boosted = new();
+
+    /// <summary>
+    /// The cap to use right now: the boost while the client's window is "Not Responding" (and for
+    /// BoostRecovery after), the normal limit otherwise. A very low cap can starve a client badly
+    /// enough to freeze it - mostly while it loads a new area - and more room is exactly what gets
+    /// it moving again; once it's fine, the low cap comes back.
+    /// </summary>
+    private static int EffectiveLimit(Process client, int limitMb, int boostMb)
+    {
+        if (boostMb <= limitMb)
+        {
+            Boosted.Remove(client.Id);
+            return limitMb;
+        }
+
+        client.Refresh();
+        var hwnd = client.MainWindowHandle;
+        // IsHungAppWindow answers instantly (Windows' own "Not Responding" test), where
+        // Process.Responding waits up to 5 seconds per client for a reply.
+        if (hwnd != IntPtr.Zero && Native.IsHungAppWindow(hwnd))
+            LastNotResponding[client.Id] = DateTime.UtcNow;
+
+        var boost = LastNotResponding.TryGetValue(client.Id, out var at) && DateTime.UtcNow - at < BoostRecovery;
+        if (boost && Boosted.Add(client.Id))
+            Log.Info($"Client limits: PID {client.Id} is not responding - memory cap raised to {boostMb} MB until it recovers.");
+        else if (!boost && Boosted.Remove(client.Id))
+            Log.Info($"Client limits: PID {client.Id} is responding again - memory cap back to {limitMb} MB.");
+
+        return boost ? boostMb : limitMb;
+    }
+
+    private static void ApplyMemory(Process client, int limitMb, int boostMb, Dictionary<int, int> limited)
     {
         if (limitMb <= 0)
         {
@@ -234,9 +274,10 @@ public static class ClientLimitsService
 
         if (DateTime.Now - SafeStartTime(client) < MemoryLimitDelay) return;
 
+        limitMb = EffectiveLimit(client, limitMb, boostMb);
         var max = (long)limitMb * 1024 * 1024;
         var min = Math.Min(16L * 1024 * 1024, max / 4);
-        var firstTime = !limited.TryGetValue(client.Id, out var current) || current != limitMb;
+        var firstTime = !limited.ContainsKey(client.Id);
 
         // Checked every pass, not set once: in testing the cap was accepted and Roblox still grew
         // well past it, so something on Roblox's side resets it. Put it back whenever it's gone.

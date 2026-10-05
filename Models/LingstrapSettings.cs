@@ -131,6 +131,9 @@ public class LingstrapSettings
     /// <summary>Hard cap on each Roblox client's resident RAM in MB, 0 for none (ClientLimitsService).</summary>
     public int MemoryLimitMb { get; set; }
 
+    /// <summary>The cap a client gets instead while its window is "Not Responding", 0 for no boost.</summary>
+    public int MemoryBoostMb { get; set; }
+
     /// <summary>Shrink every Roblox window to the smallest size Roblox allows (ClientLimitsService).</summary>
     public bool SmallWindows { get; set; }
 

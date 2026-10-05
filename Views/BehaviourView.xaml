@@ -80,9 +80,22 @@
                               Description="Caps how much RAM each Roblox window keeps; the rest moves to the page file on disk. Nothing crashes, but a game you play yourself will stutter - meant for AFK accounts. Applies 45 seconds after a window opens, so joining stays quick.">
                     <ComboBox x:Name="MemoryLimitCombo" MinWidth="130" SelectionChanged="Limits_Changed">
                         <ComboBoxItem Content="Off" Tag="0" />
+                        <ComboBoxItem Content="50 MB" Tag="50" />
                         <ComboBoxItem Content="100 MB" Tag="100" />
                         <ComboBoxItem Content="200 MB" Tag="200" />
                         <ComboBoxItem Content="300 MB" Tag="300" />
+                        <ComboBoxItem Content="500 MB" Tag="500" />
+                        <ComboBoxItem Content="750 MB" Tag="750" />
+                        <ComboBoxItem Content="1 GB" Tag="1024" />
+                        <ComboBoxItem Content="1.5 GB" Tag="1536" />
+                    </ComboBox>
+                </v:SettingRow>
+
+                <v:SettingRow Title="Memory while not responding"
+                              Description="When an account's window shows &quot;Not Responding&quot;, its memory limit goes up to this until it has been responding again for 15 seconds, then drops back. A very low limit can freeze an account while it loads; this gets it moving again.">
+                    <ComboBox x:Name="MemoryBoostCombo" MinWidth="130" SelectionChanged="Limits_Changed">
+                        <ComboBoxItem Content="No boost" Tag="0" />
+                        <ComboBoxItem Content="250 MB" Tag="250" />
                         <ComboBoxItem Content="500 MB" Tag="500" />
                         <ComboBoxItem Content="750 MB" Tag="750" />
                         <ComboBoxItem Content="1 GB" Tag="1024" />

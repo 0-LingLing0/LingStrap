@@ -13,6 +13,7 @@ public class PresetSpec
     public bool OneCorePerClient { get; init; }
     public int MemoryLimitMb { get; init; }
     public bool SmallWindows { get; init; }
+    public int MemoryBoostMb { get; init; }
 }
 
 /// <summary>The exact FastFlag/GBS/priority values each built-in preset applies.</summary>
@@ -203,6 +204,7 @@ public static class PresetCatalog
             OneCorePerClient = true,
             MemoryLimitMb = 300,
             SmallWindows = true,
+            MemoryBoostMb = 500,
         },
 
         _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, "Custom has no fixed preset spec."),

@@ -40,6 +40,7 @@ public static class PresetService
         s.OneCorePerClient = spec.OneCorePerClient;
         s.MemoryLimitMb = spec.MemoryLimitMb;
         s.SmallWindows = spec.SmallWindows;
+        s.MemoryBoostMb = spec.MemoryBoostMb;
         s.ActivePreset = preset;
         SettingsService.Save();
 
@@ -138,6 +139,7 @@ public static class PresetService
         s.OneCorePerClient = false;
         s.MemoryLimitMb = 0;
         s.SmallWindows = false;
+        s.MemoryBoostMb = 0;
         s.ActivePreset = Preset.Custom;
         s.ActiveSavedPresetId = preset.Id;
         SettingsService.Save();

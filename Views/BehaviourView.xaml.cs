@@ -31,6 +31,8 @@ public partial class BehaviourView : Page
         ChkSmallWindows.IsChecked   = s.SmallWindows;
         MemoryLimitCombo.SelectedItem = MemoryLimitCombo.Items.Cast<ComboBoxItem>()
             .FirstOrDefault(i => (string)i.Tag == s.MemoryLimitMb.ToString()) ?? MemoryLimitCombo.Items[0];
+        MemoryBoostCombo.SelectedItem = MemoryBoostCombo.Items.Cast<ComboBoxItem>()
+            .FirstOrDefault(i => (string)i.Tag == s.MemoryBoostMb.ToString()) ?? MemoryBoostCombo.Items[0];
         ChkServerLocation.IsChecked = s.ShowServerLocation;
         ChkNotification.IsChecked   = s.ShowServerNotification;
         ChkDiscord.IsChecked        = s.DiscordRichPresence;
@@ -237,6 +239,7 @@ public partial class BehaviourView : Page
         s.OneCorePerClient = ChkOneCore.IsChecked == true;
         s.SmallWindows = ChkSmallWindows.IsChecked == true;
         s.MemoryLimitMb = MemoryLimitCombo.SelectedItem is ComboBoxItem { Tag: string tag } && int.TryParse(tag, out var mb) ? mb : 0;
+        s.MemoryBoostMb = MemoryBoostCombo.SelectedItem is ComboBoxItem { Tag: string boostTag } && int.TryParse(boostTag, out var boost) ? boost : 0;
         PresetService.MarkCustom();
         SettingsService.Save();
 
