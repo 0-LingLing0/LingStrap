@@ -28,12 +28,8 @@ public static class LauncherService
         // mutex (rather than a plain static flag) catches both the same-process and cross-process
         // case the same way the other watcher guards elsewhere in this app already do.
         using var launchGuard = new Mutex(initiallyOwned: true, name: LaunchGuardMutexName, createdNew: out var isFirstLaunch);
-        if (!isFirstLaunch)
-        {
-            Log.Warn("A launch is already in progress - ignoring this one.");
-            dialog.ShowError("A launch is already in progress - please wait for it to finish.");
+        if (!isFirstLaunch && !await WaitForPreviousLaunchAsync(launchGuard, dialog))
             return false;
-        }
 
         var cancelled = false;
         Process? startedProcess = null;
@@ -383,6 +379,64 @@ public static class LauncherService
         }
 
         if (queueChanged) SettingsService.Save();
+    }
+
+    /// <summary>
+    /// Another launch holds the guard: wait for it to finish, then go - rather than dropping this
+    /// launch, which is what used to happen. A launch holds the guard until Roblox's window appears,
+    /// easily half a minute, so starting accounts back to back (an account manager, or a few
+    /// browser tabs) silently lost every launch that arrived in the meantime. Queued, they all open,
+    /// one after another. Polled on the calling (UI) thread because a mutex belongs to the thread
+    /// that acquired it, and this one is released by the same thread when the launch ends.
+    /// Returns false only if the user cancels while waiting.
+    /// </summary>
+    private static async Task<bool> WaitForPreviousLaunchAsync(Mutex guard, ILaunchProgressDialog dialog)
+    {
+        var cancelled = false;
+        void OnCancel() => cancelled = true;
+        dialog.CancelRequested += OnCancel;
+
+        try
+        {
+            Log.Info("Another launch is in progress - waiting for it to finish before starting this one.");
+            dialog.SetStatus("Waiting for the previous launch to finish");
+
+            var waited = Stopwatch.StartNew();
+            while (true)
+            {
+                try
+                {
+                    if (guard.WaitOne(0)) break;
+                }
+                catch (AbandonedMutexException)
+                {
+                    break; // the previous launch's process ended without releasing it - ours now
+                }
+
+                if (cancelled)
+                {
+                    Log.Info("Launch cancelled while waiting for the previous one.");
+                    return false;
+                }
+
+                // A launch can't take longer than its own window wait plus an install, but a
+                // stuck one must not hold every later launch back forever.
+                if (waited.Elapsed > TimeSpan.FromMinutes(5))
+                {
+                    Log.Warn("The previous launch still hadn't finished after 5 minutes - launching anyway.");
+                    return true;
+                }
+
+                await Task.Delay(300);
+            }
+
+            Log.Info($"Previous launch finished after {waited.Elapsed.TotalSeconds:0.0}s - starting this one.");
+            return true;
+        }
+        finally
+        {
+            dialog.CancelRequested -= OnCancel;
+        }
     }
 
     /// <summary>Whether any running Roblox client's executable lives inside this folder.</summary>
