@@ -98,9 +98,35 @@ public static class InstallerService
     public static async Task DownloadAndInstallAsync(ReleaseInfo release, Action<long, long> onProgress)
     {
         Directory.CreateDirectory(InstallDir);
+
+        // One install at a time across the whole machine. Several RDP logins of the same Windows
+        // user share this install folder, and Lingstrap updating in a few of them at once ran several
+        // installers side by side - all downloading to the same file, so all but one failed with
+        // "the file is being used by another process". The others now wait their turn.
+        using var installLock = new System.Threading.Mutex(false, @"Global\LingstrapSetupInstall");
+        try { installLock.WaitOne(TimeSpan.FromMinutes(5)); }
+        catch (System.Threading.AbandonedMutexException) { /* the previous installer exited mid-way - ours now */ }
+
+        try
+        {
+            await DownloadAndInstallLockedAsync(release, onProgress);
+        }
+        finally
+        {
+            try { installLock.ReleaseMutex(); } catch { /* timed out without owning it */ }
+        }
+    }
+
+    private static async Task DownloadAndInstallLockedAsync(ReleaseInfo release, Action<long, long> onProgress)
+    {
         CloseRunningLingstrap();
 
-        var tempPath = InstalledExePath + ".download";
+        // Downloads left behind by installers that failed or were closed partway.
+        foreach (var leftover in Directory.GetFiles(InstallDir, "Lingstrap.exe*.download"))
+            try { File.Delete(leftover); } catch { /* still in use by an installer that's running */ }
+
+        // Unique per installer as well, so even two that somehow overlap can't trip over each other.
+        var tempPath = $"{InstalledExePath}.{Guid.NewGuid():N}.download";
 
         HttpResponseMessage response;
         try
@@ -203,12 +229,22 @@ public static class InstallerService
     /// InstallOverExisting doesn't depend on this having worked.</summary>
     private static void CloseRunningLingstrap()
     {
+        var session = Process.GetCurrentProcess().SessionId;
+
         foreach (var proc in Process.GetProcessesByName("Lingstrap"))
         {
             using (proc)
             {
                 try
                 {
+                    // Only Lingstrap windows in THIS session. This used to close every Lingstrap
+                    // process on the machine - including the background helpers that hold
+                    // multi-instance open and apply the client limits, in every other RDP login too -
+                    // so one login updating broke multi-instance for all the others. Helpers have no
+                    // window; they keep running from the old file, which InstallOverExisting renames
+                    // aside, and the next launch starts them from the new one.
+                    if (proc.SessionId != session || proc.MainWindowHandle == IntPtr.Zero) continue;
+
                     if (proc.CloseMainWindow())
                         proc.WaitForExit(5000);
 
