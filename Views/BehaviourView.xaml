@@ -47,7 +47,7 @@
                     <Button Content="Create shortcut" Click="CreateLaunchShortcut_Click" />
                 </v:SettingRow>
                 <v:SettingRow Title="Allow multi-instance launching" ShowDivider="False"
-                              Description="Holds Roblox's singleton mutex so more than one client can run. Roblox actively works against this, so it can break at any update.">
+                              Description="Lets every account run in its own Roblox window. Roblox actively works against this, so it can break at any update. More farming settings - CPU and RAM limits, small windows, auto-closing stuck accounts - are on the Farming page.">
                     <ui:ToggleSwitch x:Name="ChkMulti" Checked="Setting_Changed" Unchecked="Setting_Changed" />
                 </v:SettingRow>
             </StackPanel>
@@ -64,54 +64,6 @@
                 <v:SettingRow Title="Pin clients to separate cores"
                               Description="Only matters with multi-instance. A single client always gets every core - never pinned.">
                     <ui:ToggleSwitch x:Name="ChkPinCores" Checked="Setting_Changed" Unchecked="Setting_Changed" />
-                </v:SettingRow>
-
-                <v:SettingRow Title="One core per account"
-                              Description="Locks every Roblox window to a single CPU thread, so many accounts at once can't take over your whole CPU. Part of the AFK preset.">
-                    <ui:ToggleSwitch x:Name="ChkOneCore" Checked="Limits_Changed" Unchecked="Limits_Changed" />
-                </v:SettingRow>
-
-                <v:SettingRow Title="Small windows"
-                              Description="Shrinks every Roblox window to the smallest size Roblox allows - fewer pixels to draw. You can still enlarge one by hand after it's opened. Part of the AFK preset.">
-                    <ui:ToggleSwitch x:Name="ChkSmallWindows" Checked="Limits_Changed" Unchecked="Limits_Changed" />
-                </v:SettingRow>
-
-                <v:SettingRow Title="Memory limit per account"
-                              Description="Caps how much RAM each Roblox window keeps; the rest moves to the page file on disk. Nothing crashes, but a game you play yourself will stutter - meant for AFK accounts. Applies 45 seconds after a window opens, so joining stays quick.">
-                    <ComboBox x:Name="MemoryLimitCombo" MinWidth="130" SelectionChanged="Limits_Changed">
-                        <ComboBoxItem Content="Off" Tag="0" />
-                        <ComboBoxItem Content="1 MB (not recommended - very unstable)" Tag="1" />
-                        <ComboBoxItem Content="100 MB" Tag="100" />
-                        <ComboBoxItem Content="150 MB" Tag="150" />
-                        <ComboBoxItem Content="200 MB" Tag="200" />
-                        <ComboBoxItem Content="300 MB" Tag="300" />
-                        <ComboBoxItem Content="500 MB" Tag="500" />
-                        <ComboBoxItem Content="750 MB" Tag="750" />
-                        <ComboBoxItem Content="1 GB" Tag="1024" />
-                        <ComboBoxItem Content="1.5 GB" Tag="1536" />
-                    </ComboBox>
-                </v:SettingRow>
-
-                <v:SettingRow Title="CPU limit per account"
-                              Description="A hard cap on how much CPU each Roblox window may use, in % of your whole CPU (the same number Task Manager shows). Lifted while a window is &quot;Not Responding&quot; so it can catch up. Lower than 2% made accounts unstable, so that's the lowest option.">
-                    <ComboBox x:Name="CpuLimitCombo" MinWidth="130" SelectionChanged="Limits_Changed">
-                        <ComboBoxItem Content="Off" Tag="0" />
-                        <ComboBoxItem Content="2%" Tag="2" />
-                        <ComboBoxItem Content="3%" Tag="3" />
-                        <ComboBoxItem Content="5%" Tag="5" />
-                    </ComboBox>
-                </v:SettingRow>
-
-                <v:SettingRow Title="Memory while not responding"
-                              Description="When an account's window shows &quot;Not Responding&quot;, its memory limit goes up to this until it has been responding again for 15 seconds, then drops back. A very low limit can freeze an account while it loads; this gets it moving again.">
-                    <ComboBox x:Name="MemoryBoostCombo" MinWidth="130" SelectionChanged="Limits_Changed">
-                        <ComboBoxItem Content="No boost" Tag="0" />
-                        <ComboBoxItem Content="250 MB" Tag="250" />
-                        <ComboBoxItem Content="500 MB" Tag="500" />
-                        <ComboBoxItem Content="750 MB" Tag="750" />
-                        <ComboBoxItem Content="1 GB" Tag="1024" />
-                        <ComboBoxItem Content="1.5 GB" Tag="1536" />
-                    </ComboBox>
                 </v:SettingRow>
 
                 <Border x:Name="CpuPinningCard" Visibility="Collapsed" Padding="16,13,16,13"

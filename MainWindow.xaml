@@ -39,6 +39,11 @@
                         <ui:SymbolIcon Symbol="Options24" />
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
+                <ui:NavigationViewItem Content="Farming" TargetPageType="{x:Type views:FarmingView}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:SymbolIcon Symbol="PlantGrass24" />
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
                 <ui:NavigationViewItem Content="Roblox Settings" TargetPageType="{x:Type views:GlobalSettingsView}">
                     <ui:NavigationViewItem.Icon>
                         <ui:SymbolIcon Symbol="Wrench24" />

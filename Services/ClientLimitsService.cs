@@ -79,7 +79,8 @@ public static class ClientLimitsService
 
     public static bool AnyLimitOn =>
         SettingsService.Current.OneCorePerClient || SettingsService.Current.MemoryLimitMb > 0
-        || SettingsService.Current.SmallWindows || SettingsService.Current.CpuLimitPercent > 0;
+        || SettingsService.Current.SmallWindows || SettingsService.Current.CpuLimitPercent > 0
+        || SettingsService.Current.MinimizeAfterLoad || SettingsService.Current.AutoCloseStuck;
 
     /// <summary>Clients whose window has already been shrunk - each one is, exactly once.</summary>
     private static readonly Dictionary<int, DateTime> WindowFirstSeen = new();
@@ -161,6 +162,8 @@ public static class ClientLimitsService
         Boosted.RemoveWhere(id => !alive.Contains(id));
         foreach (var gone in LastNotResponding.Keys.Where(id => !alive.Contains(id)).ToList()) LastNotResponding.Remove(gone);
         foreach (var gone in WindowFirstSeen.Keys.Where(id => !alive.Contains(id)).ToList()) WindowFirstSeen.Remove(gone);
+        foreach (var gone in WindowSeenAt.Keys.Where(id => !alive.Contains(id)).ToList()) WindowSeenAt.Remove(gone);
+        Minimized.RemoveWhere(id => !alive.Contains(id));
         Trimmed.RemoveWhere(id => !alive.Contains(id));
         CpuCapFailed.RemoveWhere(id => !alive.Contains(id));
 
@@ -189,12 +192,92 @@ public static class ClientLimitsService
                 ApplyCore(client, s.OneCorePerClient, pinned);
                 ApplyMemory(client, s.MemoryLimitMb, s.MemoryBoostMb, limited);
                 if (s.SmallWindows) ShrinkWindowOf(client);
+                if (s.MinimizeAfterLoad) MinimizeOnceLoaded(client);
             }
             catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
             {
                 // Exited mid-way, or not ours to touch - the next pass sorts it out.
             }
         }
+
+        if (s.AutoCloseStuck && DateTime.UtcNow - _lastStuckCheck > StuckCheckInterval)
+        {
+            _lastStuckCheck = DateTime.UtcNow;
+            CloseLongStuck(alive);
+        }
+    }
+
+    // ---- Minimize after loading ------------------------------------------------------------
+
+    /// <summary>Long enough for a client to load into its game before it's tucked away.</summary>
+    private static readonly TimeSpan MinimizeAfter = TimeSpan.FromMinutes(1);
+    private static readonly Dictionary<int, DateTime> WindowSeenAt = new();
+    private static readonly HashSet<int> Minimized = new();
+
+    /// <summary>
+    /// Minimizes the client's window once, a minute after it first appeared. A minimized Roblox
+    /// draws next to nothing. Only once: restoring a window by hand keeps it restored.
+    /// </summary>
+    private static void MinimizeOnceLoaded(Process client)
+    {
+        if (Minimized.Contains(client.Id)) return;
+
+        client.Refresh();
+        var hwnd = client.MainWindowHandle;
+        if (hwnd == IntPtr.Zero) return;
+
+        if (!WindowSeenAt.TryGetValue(client.Id, out var seen))
+        {
+            WindowSeenAt[client.Id] = DateTime.UtcNow;
+            return;
+        }
+        if (DateTime.UtcNow - seen < MinimizeAfter) return;
+
+        const int SwShowMinNoActive = 7; // minimize without stealing focus from whatever's in front
+        Native.ShowWindow(hwnd, SwShowMinNoActive);
+        Minimized.Add(client.Id);
+        Log.Info($"Client limits: minimized PID {client.Id}'s window.");
+    }
+
+    // ---- Auto-close stuck clients ----------------------------------------------------------
+
+    private static readonly TimeSpan StuckCheckInterval = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan NoWindowGrace = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan NotRespondingGrace = TimeSpan.FromMinutes(3);
+    private static DateTime _lastStuckCheck = DateTime.MinValue;
+    private static readonly Dictionary<int, DateTime> StuckSince = new();
+
+    /// <summary>
+    /// Closes clients that have been without a window (a leftover from a closed or crashed account)
+    /// or Not Responding for a good while - checked every 30 seconds, and only once a client has been
+    /// stuck across checks, so a client that's merely busy for a moment is never touched.
+    /// </summary>
+    private static void CloseLongStuck(HashSet<int> alive)
+    {
+        foreach (var gone in StuckSince.Keys.Where(id => !alive.Contains(id)).ToList()) StuckSince.Remove(gone);
+
+        var stuck = StuckAccountService.Find()
+            .Where(x => x.Problem != StuckAccountService.Problem.CrashHandler)
+            .ToList();
+        foreach (var notStuck in StuckSince.Keys.Where(id => stuck.All(x => x.Pid != id)).ToList()) StuckSince.Remove(notStuck);
+
+        var toClose = new List<StuckAccountService.StuckProcess>();
+        foreach (var x in stuck)
+        {
+            if (!StuckSince.TryGetValue(x.Pid, out var since))
+            {
+                StuckSince[x.Pid] = DateTime.UtcNow;
+                continue;
+            }
+
+            var grace = x.Problem == StuckAccountService.Problem.NoWindow ? NoWindowGrace : NotRespondingGrace;
+            if (DateTime.UtcNow - since >= grace) toClose.Add(x);
+        }
+
+        if (toClose.Count == 0) return;
+        Log.Info("Client limits: closing stuck clients - " + string.Join(", ", toClose.Select(x => $"PID {x.Pid} ({x.Problem})")));
+        StuckAccountService.Close(toClose);
+        foreach (var x in toClose) StuckSince.Remove(x.Pid);
     }
 
     private static void ApplyCore(Process client, bool on, Dictionary<int, int> pinned)

@@ -1,0 +1,145 @@
+<Page x:Class="Lingstrap.Views.FarmingView"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+      xmlns:v="clr-namespace:Lingstrap.Views"
+      Title="Farming">
+    <StackPanel Margin="28,24,28,28" MaxWidth="900" HorizontalAlignment="Left">
+        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+            <ui:SymbolIcon Symbol="PlantGrass24" Style="{StaticResource HeaderIcon}" />
+            <TextBlock Text="Farming" Style="{StaticResource H1}" Margin="0" VerticalAlignment="Center" />
+        </StackPanel>
+        <TextBlock Style="{StaticResource Sub}" Margin="0,0,0,22"
+                   Text="Everything for running many accounts at once on as little RAM, CPU and power as possible." />
+
+        <TextBlock Text="QUICK SETUP" Style="{StaticResource SectionCaption}" />
+        <Border Style="{StaticResource SettingsGroup}">
+            <StackPanel>
+                <v:SettingRow Title="AFK preset"
+                              Description="3 FPS, lowest graphics, Roblox's sound/chat/UI off, low priority with efficiency mode, one core per account, 300 MB memory limit and small windows - all in one click. Switching to another preset puts your Roblox settings back.">
+                    <Button Content="Apply AFK preset" Click="ApplyAfk_Click" />
+                </v:SettingRow>
+
+                <v:SettingRow x:Name="StatusRow" Title="Running accounts" ShowDivider="False"
+                              Description="Checks what's stopping multi-instance, or closes accounts that are stuck.">
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="Check multi-instance" Click="CheckMulti_Click" />
+                        <Button Content="Close stuck accounts" Margin="8,0,0,0" Click="CloseStuck_Click" />
+                    </StackPanel>
+                </v:SettingRow>
+            </StackPanel>
+        </Border>
+
+        <TextBlock Text="ACCOUNTS" Style="{StaticResource SectionCaption}" />
+        <Border Style="{StaticResource SettingsGroup}">
+            <StackPanel>
+                <v:SettingRow Title="Allow multi-instance launching"
+                              Description="Lets every account run in its own Roblox window. Each extra account starts from its own path to the same Roblox install, and Roblox's close-the-others signal is blocked.">
+                    <ui:ToggleSwitch x:Name="ChkMulti" Checked="Setting_Changed" Unchecked="Setting_Changed" />
+                </v:SettingRow>
+
+                <v:SettingRow Title="Close stuck accounts automatically"
+                              Description="Closes accounts left running without a window for a minute, or Not Responding for 3 minutes. Working accounts are never touched.">
+                    <ui:ToggleSwitch x:Name="ChkAutoCloseStuck" Checked="Setting_Changed" Unchecked="Setting_Changed" />
+                </v:SettingRow>
+
+                <v:SettingRow Title="Close the Roblox crash handler"
+                              Description="Roblox starts one per account. Closing them frees a little RAM and CPU each.">
+                    <ui:ToggleSwitch x:Name="ChkCrashHandler" Checked="Setting_Changed" Unchecked="Setting_Changed" />
+                </v:SettingRow>
+
+                <v:SettingRow Title="Small windows"
+                              Description="Opens every Roblox window at the smallest size Roblox allows - fewer pixels to draw. After that it's left alone.">
+                    <ui:ToggleSwitch x:Name="ChkSmallWindows" Checked="Setting_Changed" Unchecked="Setting_Changed" />
+                </v:SettingRow>
+
+                <v:SettingRow Title="Minimize accounts after they load" ShowDivider="False"
+                              Description="Minimizes each Roblox window once, a minute after it opens - a minimized Roblox draws next to nothing. Leave this off if a macro needs to see the game.">
+                    <ui:ToggleSwitch x:Name="ChkMinimize" Checked="Setting_Changed" Unchecked="Setting_Changed" />
+                </v:SettingRow>
+            </StackPanel>
+        </Border>
+
+        <TextBlock Text="CPU" Style="{StaticResource SectionCaption}" />
+        <Border Style="{StaticResource SettingsGroup}">
+            <StackPanel>
+                <v:SettingRow Title="Process priority"
+                              Description="Low also puts every account in Windows' efficiency mode: slowest, most power-saving cores and clocks.">
+                    <ComboBox x:Name="PriorityCombo" Width="160" SelectionChanged="Setting_Changed">
+                        <ComboBoxItem Content="Normal" />
+                        <ComboBoxItem Content="Above Normal" />
+                        <ComboBoxItem Content="High" />
+                        <ComboBoxItem Content="Below Normal" />
+                        <ComboBoxItem Content="Low (efficiency mode)" />
+                    </ComboBox>
+                </v:SettingRow>
+
+                <v:SettingRow Title="One core per account"
+                              Description="Locks every Roblox window to a single CPU thread, spread over separate cores, so many accounts can't take over your whole CPU.">
+                    <ui:ToggleSwitch x:Name="ChkOneCore" Checked="Setting_Changed" Unchecked="Setting_Changed" />
+                </v:SettingRow>
+
+                <v:SettingRow Title="CPU limit per account" ShowDivider="False"
+                              Description="A hard cap per Roblox window, in % of your whole CPU (as Task Manager shows it). Lifted while a window is Not Responding so it can catch up. Lower than 2% made accounts unstable.">
+                    <ComboBox x:Name="CpuLimitCombo" MinWidth="130" SelectionChanged="Setting_Changed">
+                        <ComboBoxItem Content="Off" Tag="0" />
+                        <ComboBoxItem Content="2%" Tag="2" />
+                        <ComboBoxItem Content="3%" Tag="3" />
+                        <ComboBoxItem Content="5%" Tag="5" />
+                    </ComboBox>
+                </v:SettingRow>
+            </StackPanel>
+        </Border>
+
+        <TextBlock Text="MEMORY" Style="{StaticResource SectionCaption}" />
+        <Border Style="{StaticResource SettingsGroup}">
+            <StackPanel>
+                <v:SettingRow Title="Memory limit per account"
+                              Description="Caps how much RAM each Roblox window keeps; the rest moves to the page file on disk. Nothing crashes, but a game you play yourself will stutter. Starts 45 seconds after a window opens, so joining stays quick.">
+                    <ComboBox x:Name="MemoryLimitCombo" MinWidth="130" SelectionChanged="Setting_Changed">
+                        <ComboBoxItem Content="Off" Tag="0" />
+                        <ComboBoxItem Content="1 MB (not recommended - very unstable)" Tag="1" />
+                        <ComboBoxItem Content="100 MB" Tag="100" />
+                        <ComboBoxItem Content="150 MB" Tag="150" />
+                        <ComboBoxItem Content="200 MB" Tag="200" />
+                        <ComboBoxItem Content="300 MB" Tag="300" />
+                        <ComboBoxItem Content="500 MB" Tag="500" />
+                        <ComboBoxItem Content="750 MB" Tag="750" />
+                        <ComboBoxItem Content="1 GB" Tag="1024" />
+                        <ComboBoxItem Content="1.5 GB" Tag="1536" />
+                    </ComboBox>
+                </v:SettingRow>
+
+                <v:SettingRow Title="Memory while not responding" ShowDivider="False"
+                              Description="While a window is Not Responding its memory limit goes up to this, and drops back once it has responded for 15 seconds. Gets frozen accounts moving again.">
+                    <ComboBox x:Name="MemoryBoostCombo" MinWidth="130" SelectionChanged="Setting_Changed">
+                        <ComboBoxItem Content="No boost" Tag="0" />
+                        <ComboBoxItem Content="250 MB" Tag="250" />
+                        <ComboBoxItem Content="500 MB" Tag="500" />
+                        <ComboBoxItem Content="750 MB" Tag="750" />
+                        <ComboBoxItem Content="1 GB" Tag="1024" />
+                        <ComboBoxItem Content="1.5 GB" Tag="1536" />
+                    </ComboBox>
+                </v:SettingRow>
+            </StackPanel>
+        </Border>
+
+        <TextBlock Text="WINDOWS AND LINGSTRAP" Style="{StaticResource SectionCaption}" />
+        <Border Style="{StaticResource SettingsGroup}">
+            <StackPanel>
+                <v:SettingRow Title="Turn off Xbox Game Bar recording"
+                              Description="Windows otherwise hooks into every game window to be ready to record. Only for your Windows user, and switching this off again puts it back exactly as it was.">
+                    <ui:ToggleSwitch x:Name="ChkGameDvr" Checked="GameDvr_Changed" Unchecked="GameDvr_Changed" />
+                </v:SettingRow>
+
+                <v:SettingRow Title="Lightweight mode" ShowDivider="False"
+                              Description="Turns off Lingstrap's extras that run per account: the FPS overlay, Discord status and the server-location popup. Turn them back on any time on the Behaviour page.">
+                    <Button x:Name="LightweightButton" Content="Turn extras off" Click="Lightweight_Click" />
+                </v:SettingRow>
+            </StackPanel>
+        </Border>
+
+        <TextBlock Style="{StaticResource Sub}" Margin="4,0,0,0"
+                   Text="Network optimization (lower ping, needs administrator) is on the Behaviour page." />
+    </StackPanel>
+</Page>
