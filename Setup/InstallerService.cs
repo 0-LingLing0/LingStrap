@@ -144,6 +144,7 @@ public static class InstallerService
         try
         {
             long totalRead = 0;
+            var expected = response.Content.Headers.ContentLength ?? release.Size;
             await using (var httpStream = await response.Content.ReadAsStreamAsync())
             await using (var fileStream = File.Create(tempPath))
             {
@@ -153,16 +154,19 @@ public static class InstallerService
                 {
                     await fileStream.WriteAsync(buffer.AsMemory(0, read));
                     totalRead += read;
-                    onProgress(totalRead, release.Size);
+                    onProgress(totalRead, expected);
                 }
             }
 
-            // GitHub states the exact size, so check it rather than trusting that a cut-off download
-            // always surfaces as an exception. Installing a truncated exe would leave a Lingstrap
-            // that can't start - and so can't update itself out of the problem either.
-            if (release.Size > 0 && totalRead != release.Size)
+            // Check the size rather than trusting that a cut-off download always surfaces as an
+            // exception: installing a truncated exe would leave a Lingstrap that can't start - and so
+            // can't update itself out of the problem either. Against the size of THIS download, as
+            // the response states it - not the size the release listing gave a moment earlier: a
+            // release publishing replaces the file in between, and a newer build a few bytes
+            // different was being rejected as "incomplete" though it arrived whole.
+            if (expected > 0 && totalRead != expected)
                 throw new InstallException(
-                    $"The download was incomplete ({totalRead:N0} of {release.Size:N0} bytes) - check your connection and run the installer again. Nothing was changed.");
+                    $"The download was incomplete ({totalRead:N0} of {expected:N0} bytes) - check your connection and run the installer again. Nothing was changed.");
 
             InstallOverExisting(tempPath);
         }
