@@ -44,6 +44,7 @@ public partial class FarmingView : Page
         Select(MemoryLimitCombo, s.MemoryLimitMb.ToString());
         Select(MemoryBoostCombo, s.MemoryBoostMb.ToString());
         Select(CpuLimitCombo, s.CpuLimitPercent.ToString(CultureInfo.InvariantCulture));
+        RefreshNetworkRow();
 
         var extrasOn = s.ShowFpsOverlay || s.DiscordRichPresence || s.ShowServerLocation;
         LightweightButton.IsEnabled = extrasOn;
@@ -125,6 +126,32 @@ public partial class FarmingView : Page
     {
         if (_loading) return;
         GameDvrService.Apply(turnOff: ChkGameDvr.IsChecked == true);
+    }
+
+    private void RefreshNetworkRow()
+    {
+        var on = RobloxQosService.IsOn || NetworkOptimizationService.HasBackup();
+        NetworkRow.Title = on ? "Network for farming - optimized" : "Network for farming";
+        NetworkRestoreButton.IsEnabled = on;
+    }
+
+    private async void NetworkOptimize_Click(object sender, RoutedEventArgs e) => await RunNetwork(on: true);
+    private async void NetworkRestore_Click(object sender, RoutedEventArgs e) => await RunNetwork(on: false);
+
+    /// <summary>Both network changes in one elevated run - one administrator prompt.</summary>
+    private async System.Threading.Tasks.Task RunNetwork(bool on)
+    {
+        var ran = await System.Threading.Tasks.Task.Run(() => RobloxQosService.RunElevated(on));
+        RefreshNetworkRow();
+        if (!ran) return; // the administrator prompt was declined - nothing changed
+
+        await DialogHelper.ShowErrorAsync(this,
+            on
+                ? (RobloxQosService.IsOn
+                    ? "Done. The network is set up for farming - it applies to accounts started from now on. Exactly what was changed is in the log (About > Open logs)."
+                    : "Only partly done - see the log (About > Open logs).")
+                : "Done - every network setting is back to what it was before.",
+            "Network for farming");
     }
 
     private async void ApplyAfk_Click(object sender, RoutedEventArgs e)

@@ -124,6 +124,19 @@
             </StackPanel>
         </Border>
 
+        <TextBlock Text="NETWORK" Style="{StaticResource SectionCaption}" />
+        <Border Style="{StaticResource SettingsGroup}">
+            <StackPanel>
+                <v:SettingRow x:Name="NetworkRow" Title="Network for farming" ShowDivider="False"
+                              Description="One click: steady connection for every account without causing ping spikes for other devices at home. Turns off network power saving and Windows' packet throttling, stops Windows Update sharing your connection, and marks Roblox traffic as background so routers that support it let other devices go first. Needs administrator rights; Restore puts everything back exactly.">
+                    <StackPanel Orientation="Horizontal">
+                        <Button Content="Optimize" Click="NetworkOptimize_Click" />
+                        <Button x:Name="NetworkRestoreButton" Content="Restore" Margin="8,0,0,0" Click="NetworkRestore_Click" />
+                    </StackPanel>
+                </v:SettingRow>
+            </StackPanel>
+        </Border>
+
         <TextBlock Text="WINDOWS AND LINGSTRAP" Style="{StaticResource SectionCaption}" />
         <Border Style="{StaticResource SettingsGroup}">
             <StackPanel>

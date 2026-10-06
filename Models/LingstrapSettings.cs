@@ -146,8 +146,7 @@ public class LingstrapSettings
 
     /// <summary>Xbox Game Bar background recording switched off for this Windows user (GameDvrService),
     /// and what those values were before, to put back - null for one that didn't exist.</summary>
-    public bool DisableGameDvr { get; set; }
-    public Dictionary<string, int?> GameDvrBackup { get; set; } = new();
+    public bool DisableGameDvr { get; set; }    public Dictionary<string, int?> GameDvrBackup { get; set; } = new();
 
     /// <summary>Shrink every Roblox window to the smallest size Roblox allows (ClientLimitsService).</summary>
     public bool SmallWindows { get; set; }

@@ -28,8 +28,13 @@ public static class LauncherService
         // mutex (rather than a plain static flag) catches both the same-process and cross-process
         // case the same way the other watcher guards elsewhere in this app already do.
         using var launchGuard = new Mutex(initiallyOwned: true, name: LaunchGuardMutexName, createdNew: out var isFirstLaunch);
-        if (!isFirstLaunch && !await WaitForPreviousLaunchAsync(launchGuard, dialog))
-            return false;
+        var ownsGuard = isFirstLaunch;
+        if (!isFirstLaunch)
+        {
+            var (proceed, acquired) = await WaitForPreviousLaunchAsync(launchGuard, dialog);
+            if (!proceed) return false;
+            ownsGuard = acquired;
+        }
 
         var cancelled = false;
         Process? startedProcess = null;
@@ -335,6 +340,16 @@ public static class LauncherService
         finally
         {
             dialog.CancelRequested -= OnCancel;
+
+            // Released explicitly. Disposing only closes the handle - the mutex stays owned by this
+            // thread for as long as it lives, and a Lingstrap that stays running in the background
+            // after a launch kept it owned: the next queued account waited until that Lingstrap
+            // closed (90 seconds in testing) instead of the moment this launch was done.
+            if (ownsGuard)
+            {
+                try { launchGuard.ReleaseMutex(); }
+                catch (ApplicationException) { /* not owned by this thread after all - Dispose handles it */ }
+            }
         }
     }
 
@@ -398,7 +413,7 @@ public static class LauncherService
     /// that acquired it, and this one is released by the same thread when the launch ends.
     /// Returns false only if the user cancels while waiting.
     /// </summary>
-    private static async Task<bool> WaitForPreviousLaunchAsync(Mutex guard, ILaunchProgressDialog dialog)
+    private static async Task<(bool Proceed, bool Acquired)> WaitForPreviousLaunchAsync(Mutex guard, ILaunchProgressDialog dialog)
     {
         var cancelled = false;
         void OnCancel() => cancelled = true;
@@ -424,7 +439,7 @@ public static class LauncherService
                 if (cancelled)
                 {
                     Log.Info("Launch cancelled while waiting for the previous one.");
-                    return false;
+                    return (false, false);
                 }
 
                 // A launch can't take longer than its own window wait plus an install, but a
@@ -432,21 +447,20 @@ public static class LauncherService
                 if (waited.Elapsed > TimeSpan.FromMinutes(5))
                 {
                     Log.Warn("The previous launch still hadn't finished after 5 minutes - launching anyway.");
-                    return true;
+                    return (true, false);
                 }
 
                 await Task.Delay(300);
             }
 
             Log.Info($"Previous launch finished after {waited.Elapsed.TotalSeconds:0.0}s - starting this one.");
-            return true;
+            return (true, true);
         }
         finally
         {
             dialog.CancelRequested -= OnCancel;
         }
     }
-
     /// <summary>Whether any running Roblox client's executable lives inside this folder.</summary>
     private static bool IsInUseByRunningClient(string versionFolder)
     {

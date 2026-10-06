@@ -173,6 +173,18 @@ public partial class App : Application
             return;
         }
 
+        if (LaunchArgs.Length > 1 && LaunchArgs[0].Equals("-farmnetwork", StringComparison.OrdinalIgnoreCase))
+        {
+            // Farming > Network: elevated, one-shot - the network optimization and the Roblox traffic
+            // marking together, so one click needs one administrator prompt.
+            _isWatcherMode = true;
+            var on = LaunchArgs[1].Equals("on", StringComparison.OrdinalIgnoreCase);
+            if (on) NetworkOptimizationService.RunAll(); else NetworkOptimizationService.RestoreAll();
+            RobloxQosService.ApplyElevated(on);
+            Shutdown();
+            return;
+        }
+
         if (LaunchArgs.Length > 0 && LaunchArgs[0].Equals("-limitswatcher", StringComparison.OrdinalIgnoreCase))
         {
             _isWatcherMode = true;

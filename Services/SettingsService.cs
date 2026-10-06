@@ -81,15 +81,25 @@ public static class SettingsService
 
     private static LingstrapSettings? TryLoadFrom(string path)
     {
-        try
+        // A few tries first: another Lingstrap process (a second account launching, a watcher) can be
+        // in the middle of saving it, and "being used by another process" used to count as corrupted -
+        // so the older .bak got loaded instead and the most recent changes were quietly lost.
+        for (var attempt = 1; ; attempt++)
         {
-            var json = File.ReadAllText(path);
-            return JsonSerializer.Deserialize<LingstrapSettings>(json, JsonOptions);
-        }
-        catch (Exception ex)
-        {
-            Log.Warn($"Could not parse {Path.GetFileName(path)}: {ex.Message}");
-            return null;
+            try
+            {
+                var json = File.ReadAllText(path);
+                return JsonSerializer.Deserialize<LingstrapSettings>(json, JsonOptions);
+            }
+            catch (IOException) when (attempt < 20)
+            {
+                System.Threading.Thread.Sleep(50);
+            }
+            catch (Exception ex)
+            {
+                Log.Warn($"Could not parse {Path.GetFileName(path)}: {ex.Message}");
+                return null;
+            }
         }
     }
 
