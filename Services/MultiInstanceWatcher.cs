@@ -95,14 +95,24 @@ public static class MultiInstanceWatcher
             catch (WaitHandleCannotBeOpenedException)
             {
                 // The name exists as something else - Roblox's real event.
-                var holders = SingletonEventService.FindHolders();
-                Log.Info($"Multi-instance: Roblox's single-window signal is held by PID {string.Join(", ", holders)} - releasing it.");
-                SingletonEventService.Release(holders);
+                var (holders, uninspectable) = SingletonEventService.Scan();
+                if (holders.Count == 0 && uninspectable.Count == 0)
+                {
+                    Log.Warn("Multi-instance: Roblox's single-window signal exists, but no process in this session was found holding it.");
+                    Thread.Sleep(500);
+                    continue;
+                }
+                if (holders.Count > 0)
+                {
+                    Log.Info($"Multi-instance: Roblox's single-window signal is held by PID {string.Join(", ", holders)} - releasing it.");
+                    SingletonEventService.Release(holders);
+                }
                 Thread.Sleep(200);
             }
         }
 
-        Log.Warn("Multi-instance: couldn't take over Roblox's single-window signal - new clients will close older ones until every Roblox is closed.");
+        Log.Warn("Multi-instance: couldn't take over Roblox's single-window signal - new clients will close older ones. " +
+                 "Use Farming > Check multi-instance, or close every Roblox and launch again.");
         return null;
     }
 

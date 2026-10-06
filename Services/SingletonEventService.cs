@@ -19,21 +19,46 @@ public static class SingletonEventService
 {
     public const string EventName = "ROBLOX_singletonEvent";
 
-    /// <summary>Roblox clients in this session that hold a real ROBLOX_singletonEvent, by PID.</summary>
-    public static List<int> FindHolders()
+    /// <summary>
+    /// Every process in this session holding a real ROBLOX_singletonEvent - not just Roblox clients:
+    /// on one PC the event stayed alive after it was released in every client Lingstrap could see,
+    /// held by something it hadn't looked at. Also returns the Roblox clients that couldn't be
+    /// inspected at all, which may be holding it too.
+    /// </summary>
+    public static (List<int> Holders, List<int> Uninspectable) Scan()
     {
+        var self = Environment.ProcessId;
+        var session = System.Diagnostics.Process.GetCurrentProcess().SessionId;
         var pids = new List<int>();
-        foreach (var client in RobloxProcesses.Clients())
-            using (client) pids.Add(client.Id);
+        foreach (var p in System.Diagnostics.Process.GetProcesses())
+        {
+            using (p)
+            {
+                try { if (p.SessionId == session && p.Id != self) pids.Add(p.Id); }
+                catch { /* exited */ }
+            }
+        }
 
-        return EventHandlesIn(pids).Where(kv => kv.Value.Count > 0).Select(kv => kv.Key).ToList();
+        var clients = new HashSet<int>();
+        foreach (var c in RobloxProcesses.Clients())
+            using (c) clients.Add(c.Id);
+
+        var scan = EventHandlesIn(pids, out var unopened);
+        var uninspectable = unopened.Keys.Where(clients.Contains).ToList();
+        foreach (var pid in uninspectable)
+            Log.Warn($"Multi-instance: couldn't look inside Roblox PID {pid} (Win32 error {unopened[pid]}) - it may be holding the single-window signal.");
+
+        return (scan.Where(kv => kv.Value.Count > 0).Select(kv => kv.Key).ToList(), uninspectable);
     }
+
+    /// <summary>Processes in this session holding a real ROBLOX_singletonEvent, by PID.</summary>
+    public static List<int> FindHolders() => Scan().Holders;
 
     /// <summary>Closes every ROBLOX_singletonEvent handle inside these processes. Returns how many.</summary>
     public static int Release(IEnumerable<int> pids)
     {
         var closed = 0;
-        foreach (var (pid, handles) in EventHandlesIn(pids))
+        foreach (var (pid, handles) in EventHandlesIn(pids, out _))
         {
             if (handles.Count == 0) continue;
             var process = Native.OpenProcess(ProcessDupHandle, false, pid);
@@ -53,9 +78,11 @@ public static class SingletonEventService
     }
 
     /// <summary>For each process: the handle values of every Event named ...\ROBLOX_singletonEvent
-    /// inside it. One pass over the system's handle list for all of them.</summary>
-    private static Dictionary<int, List<IntPtr>> EventHandlesIn(IEnumerable<int> pids)
+    /// inside it. One pass over the system's handle list for all of them. Processes that couldn't be
+    /// opened come back in <paramref name="unopened"/> with the Win32 error.</summary>
+    private static Dictionary<int, List<IntPtr>> EventHandlesIn(IEnumerable<int> pids, out Dictionary<int, int> unopened)
     {
+        unopened = new Dictionary<int, int>();
         var result = new Dictionary<int, List<IntPtr>>();
         var processes = new Dictionary<int, IntPtr>();
         foreach (var pid in pids.Distinct())
@@ -63,10 +90,14 @@ public static class SingletonEventService
             result[pid] = new List<IntPtr>();
             var handle = Native.OpenProcess(ProcessDupHandle, false, pid);
             if (handle != IntPtr.Zero) processes[pid] = handle;
+            else unopened[pid] = Marshal.GetLastWin32Error();
         }
         if (processes.Count == 0) return result;
 
         var buffer = IntPtr.Zero;
+        // An event of our own, to learn which object-type number this Windows build uses for events -
+        // so only handles of that type get copied and inspected, not every handle of every process.
+        using var probe = new System.Threading.EventWaitHandle(false, System.Threading.EventResetMode.ManualReset);
         try
         {
             buffer = QuerySystemHandles();
@@ -75,10 +106,20 @@ public static class SingletonEventService
             var count = (long)Marshal.ReadIntPtr(buffer);
             var entrySize = Marshal.SizeOf<SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX>();
             var self = Native.GetCurrentProcess();
+            var selfPid = (ulong)Environment.ProcessId;
+            var probeHandle = probe.SafeWaitHandle.DangerousGetHandle();
+
+            int eventType = -1;
+            for (long i = 0; i < count && eventType < 0; i++)
+            {
+                var entry = Marshal.PtrToStructure<SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX>(buffer + 2 * IntPtr.Size + (int)(i * entrySize));
+                if ((ulong)entry.UniqueProcessId == selfPid && entry.HandleValue == probeHandle) eventType = entry.ObjectTypeIndex;
+            }
 
             for (long i = 0; i < count; i++)
             {
                 var entry = Marshal.PtrToStructure<SYSTEM_HANDLE_TABLE_ENTRY_INFO_EX>(buffer + 2 * IntPtr.Size + (int)(i * entrySize));
+                if (eventType >= 0 && entry.ObjectTypeIndex != eventType) continue;
                 if (!processes.TryGetValue((int)(ulong)entry.UniqueProcessId, out var process)) continue;
                 if (!Native.DuplicateHandle(process, entry.HandleValue, self, out var copy, 0, false, DuplicateSameAccess)) continue;
 

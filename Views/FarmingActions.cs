@@ -43,7 +43,9 @@ public static class FarmingActions
         if (!report.SettingOn)
             lines.Add("• \"Allow multi-instance launching\" is off - turn it on first.");
         foreach (var pid in report.Blocking)
-            lines.Add($"• Account PID {pid} is BLOCKING: it was opened before multi-instance was ready, so every new account makes it close (or takes over its game).");
+            lines.Add($"• PID {pid} is BLOCKING: it holds Roblox's close signal (opened before multi-instance was ready), so every new account makes the others close.");
+        foreach (var pid in report.Uninspectable)
+            lines.Add($"• Account PID {pid} couldn't be checked - Windows wouldn't let Lingstrap look inside it. It may be the one blocking.");
         foreach (var s in report.Stuck)
             lines.Add(s.Problem == StuckAccountService.Problem.NoWindow
                 ? $"• PID {s.Pid} is running without a window - a leftover from a closed account."
