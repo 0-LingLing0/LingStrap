@@ -130,7 +130,7 @@ public partial class FarmingView : Page
 
     private void RefreshNetworkRow()
     {
-        var on = RobloxQosService.IsOn || NetworkOptimizationService.HasBackup();
+        var on = NetworkOptimizationService.HasBackup() || RobloxQosService.LegacyMarkingPresent;
         NetworkRow.Title = on ? "Network for farming - optimized" : "Network for farming";
         NetworkRestoreButton.IsEnabled = on;
     }
@@ -147,9 +147,9 @@ public partial class FarmingView : Page
 
         await DialogHelper.ShowErrorAsync(this,
             on
-                ? (RobloxQosService.IsOn
-                    ? "Done. The network is set up for farming - it applies to accounts started from now on. Exactly what was changed is in the log (About > Open logs)."
-                    : "Only partly done - see the log (About > Open logs).")
+                ? (NetworkOptimizationService.HasBackup()
+                    ? "Done - the network is set up for farming. Exactly what was changed on this PC is in the log (About > Open logs)."
+                    : "That didn't work - see the log (About > Open logs).")
                 : "Done - every network setting is back to what it was before.",
             "Network for farming");
     }

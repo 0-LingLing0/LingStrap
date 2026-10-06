@@ -175,12 +175,11 @@ public partial class App : Application
 
         if (LaunchArgs.Length > 1 && LaunchArgs[0].Equals("-farmnetwork", StringComparison.OrdinalIgnoreCase))
         {
-            // Farming > Network: elevated, one-shot - the network optimization and the Roblox traffic
-            // marking together, so one click needs one administrator prompt.
+            // Farming > Network for farming: elevated, one-shot, like -networkoptimize.
             _isWatcherMode = true;
             var on = LaunchArgs[1].Equals("on", StringComparison.OrdinalIgnoreCase);
             if (on) NetworkOptimizationService.RunAll(); else NetworkOptimizationService.RestoreAll();
-            RobloxQosService.ApplyElevated(on);
+            RobloxQosService.RemoveLegacyMarking();
             Shutdown();
             return;
         }
