@@ -41,23 +41,11 @@
                             </StackPanel>
                             <TextBlock x:Name="PresetDesc" Style="{StaticResource Sub}" Margin="0,2,0,22" MaxWidth="480" />
 
-                            <StackPanel Orientation="Horizontal">
-                                <ui:Button x:Name="LaunchButton" Content="Launch Roblox"
-                                           Appearance="Primary" FontSize="17" Padding="32,15"
-                                           HorizontalAlignment="Left"
-                                           Icon="{ui:SymbolIcon PlayCircle24}"
-                                           Click="LaunchButton_Click" />
-                                <ui:Button Content="Close stuck accounts" Margin="12,0,0,0" Padding="18,15"
-                                           VerticalAlignment="Stretch"
-                                           Icon="{ui:SymbolIcon DismissCircle24}"
-                                           ToolTip="Closes Roblox windows that are Not Responding, Roblox left running without a window, and crash handlers. Working accounts are left alone."
-                                           Click="CloseStuck_Click" />
-                                <ui:Button Content="Check multi-instance" Margin="12,0,0,0" Padding="18,15"
-                                           VerticalAlignment="Stretch"
-                                           Icon="{ui:SymbolIcon Stethoscope24}"
-                                           ToolTip="Shows which accounts are stopping multi-instance from working, and fixes it."
-                                           Click="CheckMulti_Click" />
-                            </StackPanel>
+                            <ui:Button x:Name="LaunchButton" Content="Launch Roblox"
+                                       Appearance="Primary" FontSize="17" Padding="32,15"
+                                       HorizontalAlignment="Left"
+                                       Icon="{ui:SymbolIcon PlayCircle24}"
+                                       Click="LaunchButton_Click" />
                         </StackPanel>
                     </Grid>
                 </Border>
