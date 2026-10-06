@@ -118,17 +118,6 @@ public partial class HomeView : Page
         }
     }
 
-    private async void CloseStuck_Click(object sender, RoutedEventArgs e)
-    {
-        await FarmingActions.CloseStuckAsync(this);
-        Refresh();
-    }
-
-    private async void CheckMulti_Click(object sender, RoutedEventArgs e)
-    {
-        await FarmingActions.CheckMultiInstanceAsync(this);
-        Refresh();
-    }
     private void OpenFolder_Click(object sender, RoutedEventArgs e)
     {
         Paths.EnsureCreated();
