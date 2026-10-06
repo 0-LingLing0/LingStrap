@@ -108,6 +108,9 @@ public static class LauncherService
 
             dialog.SetProgress(60);
             dialog.SetStatus("Applying mods");
+            // Where this client is started from - the real exe, or with multi-instance and another
+            // client already running, a separate path to it (see MultiInstancePaths).
+            var launchExe = playerExe;
             await Task.Run(() =>
             {
                 // ModsService.Apply restores every mod/cursor file to Roblox's original, then copies
@@ -125,14 +128,19 @@ public static class LauncherService
                 }
 
                 if (SettingsService.Current.MultiInstance)
+                {
                     MultiInstanceWatcher.EnsureWatcherRunning();
+                    launchExe = MultiInstancePaths.ChooseLaunchExe(versionFolder);
+                }
 
                 if (SettingsService.Current.ForceDedicatedGpu)
                 {
                     // The version folder (and so the exe path) changes hash after every Roblox
                     // update - clear old entries and set the current one fresh on every launch.
+                    // Windows reads this when the process starts, so the entry only has to be right
+                    // for the path this client is about to start from.
                     GpuPreferenceService.RemoveAllManaged();
-                    GpuPreferenceService.Apply(playerExe);
+                    GpuPreferenceService.Apply(launchExe);
                 }
             });
             Stage("mods, multi-instance and GPU preference");
@@ -156,7 +164,7 @@ public static class LauncherService
 
             for (var attempt = 1; attempt <= maxAttempts; attempt++)
             {
-                process = await Task.Run(() => StartProcess(playerExe, versionFolder, launchUri));
+                process = await Task.Run(() => StartProcess(launchExe, Path.GetDirectoryName(launchExe)!, launchUri));
 
                 if (process is null)
                 {
@@ -185,7 +193,7 @@ public static class LauncherService
                     PowerThrottlingService.DisableThrottling(process);
                 WireDiscordExit(process);
 
-                Log.Info($"Launched Roblox from {playerExe}" + (attempt > 1 ? $" (retry {attempt - 1})" : ""));
+                Log.Info($"Launched Roblox from {launchExe}" + (attempt > 1 ? $" (retry {attempt - 1})" : ""));
                 Stage("starting Roblox's process");
 
                 dialog.SetProgress(85);
@@ -454,7 +462,9 @@ public static class LauncherService
                 // as possibly this folder: keeping one only postpones deleting it to the next launch,
                 // deleting a live one costs the session.
                 var exe = GetExePath(client.Id);
-                if (exe == null || Path.GetFullPath(exe).StartsWith(root, StringComparison.OrdinalIgnoreCase))
+                // Seen through Lingstrap's multi-instance junctions: a client started from one of
+                // those runs out of the version folder it points to.
+                if (exe == null || MultiInstancePaths.ResolveExePath(exe).StartsWith(root, StringComparison.OrdinalIgnoreCase))
                     return true;
             }
         }

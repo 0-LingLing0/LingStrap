@@ -5,15 +5,41 @@ using System.Threading;
 namespace Lingstrap.Services;
 
 /// <summary>
-/// Roblox refuses to start a second copy unless these two named kernel objects already exist
-/// when it checks. A detached watcher process (this app relaunched with -multiinstancewatcher)
-/// creates and holds them until every Roblox process has exited, then lets them go.
+/// Keeps Roblox from closing older clients when a new one starts, for as long as clients are running.
+///
+/// Roblox stays at one window per session two ways, and both have to be beaten:
+/// - ROBLOX_singletonEvent: every client waits on it, and a new client signals it, which makes every
+///   older client shut down. This watcher takes that name first with an object that ISN'T an event
+///   (a semaphore), so Roblox can't create the event at all - it logs "Cannot create event to secure
+///   single process" and runs normally without it.
+/// - "NoReload": a new client looks for one already running from the same exe path and hands its
+///   launch over to it, then exits - the older client switches to the new game instead. That's
+///   handled per launch by giving each extra client its own path (MultiInstancePaths).
+///
+/// This used to hold ROBLOX_singletonMutex and an event instead - the trick from before Roblox added
+/// either of the above, which stopped working once it did.
+///
+/// Runs as a detached process (this app relaunched with -multiinstancewatcher) so it outlives
+/// CloseLingstrapOnLaunch, and lets the name go once every client in the session has closed.
 /// </summary>
 public static class MultiInstanceWatcher
 {
-    private const string MutexName = "ROBLOX_singletonMutex";
-    private const string EventName = "ROBLOX_singletonEvent";
     private const string WatcherGuardMutexName = "Lingstrap_MultiInstanceWatcherActive";
+
+    /// <summary>Whether this session's singleton event name is held by Lingstrap's placeholder -
+    /// i.e. multi-instance is armed for the next client that starts.</summary>
+    public static bool IsArmed()
+    {
+        try
+        {
+            using var held = Semaphore.OpenExisting(SingletonEventService.EventName);
+            return true;
+        }
+        catch
+        {
+            return false; // doesn't exist, or exists as Roblox's real event
+        }
+    }
 
     /// <summary>Runs on the watcher process. Blocks until every Roblox client has closed.</summary>
     public static void RunAndBlock()
@@ -28,15 +54,11 @@ public static class MultiInstanceWatcher
                 return;
             }
 
-            using var mutex = new Mutex(initiallyOwned: true, name: MutexName);
-            using var evt = new EventWaitHandle(initialState: true, mode: EventResetMode.ManualReset, name: EventName);
+            using var placeholder = TakeSingletonEventName();
+            if (placeholder == null) return;
 
-            // This watcher is spawned (from EnsureWatcherRunning, below) BEFORE the launch that's
-            // waiting on it actually starts RobloxPlayerBeta.exe - checking "is Roblox still
-            // running" immediately here would see zero processes, since none has started yet, and
-            // fall straight through: the mutex/event get disposed within milliseconds of being
-            // created, right as EnsureWatcherRunning is still polling for them. Wait for at least
-            // one Roblox process to actually appear first, THEN watch for them all to close.
+            // Spawned BEFORE the launch that's waiting on it starts RobloxPlayerBeta.exe - so wait for
+            // a client to actually appear first, then for them all to close.
             var startDeadline = DateTime.UtcNow.AddSeconds(30);
             while (RobloxProcesses.Count() == 0 && DateTime.UtcNow < startDeadline)
                 Thread.Sleep(500);
@@ -52,13 +74,42 @@ public static class MultiInstanceWatcher
     }
 
     /// <summary>
-    /// Launches the detached watcher and waits briefly for it to be ready. Never throws and
-    /// never blocks a launch for long - if it doesn't work out, Roblox just runs single-instance.
+    /// Creates the placeholder under ROBLOX_singletonEvent. If a client already made the real event
+    /// (it started without this watcher - opened outside Lingstrap, or before multi-instance was on),
+    /// that event is released inside the clients holding it first; they keep running.
+    /// </summary>
+    private static Semaphore? TakeSingletonEventName()
+    {
+        for (var attempt = 1; attempt <= 3; attempt++)
+        {
+            try
+            {
+                return new Semaphore(0, 1, SingletonEventService.EventName);
+            }
+            catch (WaitHandleCannotBeOpenedException)
+            {
+                // The name exists as something else - Roblox's real event.
+                var holders = SingletonEventService.FindHolders();
+                Log.Info($"Multi-instance: Roblox's single-window signal is held by PID {string.Join(", ", holders)} - releasing it.");
+                SingletonEventService.Release(holders);
+                Thread.Sleep(200);
+            }
+        }
+
+        Log.Warn("Multi-instance: couldn't take over Roblox's single-window signal - new clients will close older ones until every Roblox is closed.");
+        return null;
+    }
+
+    /// <summary>
+    /// Launches the detached watcher and waits briefly for it to be armed. Never throws and never
+    /// blocks a launch for long - if it doesn't work out, Roblox just runs single-instance.
     /// </summary>
     public static void EnsureWatcherRunning()
     {
         try
         {
+            if (IsArmed()) return;
+
             var exePath = Environment.ProcessPath;
             if (string.IsNullOrEmpty(exePath))
             {
@@ -74,13 +125,9 @@ public static class MultiInstanceWatcher
                 CreateNoWindow = true,
             });
 
-            for (var i = 0; i < 20; i++)
+            for (var i = 0; i < 40; i++)
             {
-                if (Mutex.TryOpenExisting(MutexName, out var handle))
-                {
-                    handle.Dispose();
-                    return;
-                }
+                if (IsArmed()) return;
                 Thread.Sleep(100);
             }
 

@@ -52,6 +52,11 @@
                                            Icon="{ui:SymbolIcon DismissCircle24}"
                                            ToolTip="Closes Roblox windows that are Not Responding, Roblox left running without a window, and crash handlers. Working accounts are left alone."
                                            Click="CloseStuck_Click" />
+                                <ui:Button Content="Check multi-instance" Margin="12,0,0,0" Padding="18,15"
+                                           VerticalAlignment="Stretch"
+                                           Icon="{ui:SymbolIcon Stethoscope24}"
+                                           ToolTip="Shows which accounts are stopping multi-instance from working, and fixes it."
+                                           Click="CheckMulti_Click" />
                             </StackPanel>
                         </StackPanel>
                     </Grid>
