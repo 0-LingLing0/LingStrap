@@ -57,6 +57,12 @@ public static class MultiInstanceWatcher
             using var placeholder = TakeSingletonEventName();
             if (placeholder == null) return;
 
+            // And Roblox's singleton mutex, held the way Bloxstrap, Fishstrap and Froststrap always
+            // did - for game launches that's what keeps a new client from treating itself as the
+            // one-and-only instance. Not obtainable if a client already owns it; the event and the
+            // separate paths still cover that case.
+            using var singletonMutex = TakeSingletonMutex();
+
             // Spawned BEFORE the launch that's waiting on it starts RobloxPlayerBeta.exe - so wait for
             // a client to actually appear first, then for them all to close.
             var startDeadline = DateTime.UtcNow.AddSeconds(30);
@@ -98,6 +104,36 @@ public static class MultiInstanceWatcher
 
         Log.Warn("Multi-instance: couldn't take over Roblox's single-window signal - new clients will close older ones until every Roblox is closed.");
         return null;
+    }
+
+    private const string SingletonMutexName = "ROBLOX_singletonMutex";
+
+    private static Mutex? TakeSingletonMutex()
+    {
+        try
+        {
+            var mutex = new Mutex(initiallyOwned: true, SingletonMutexName, out var createdNew);
+            if (createdNew) return mutex;
+
+            // A client already made it - try to own it anyway (it may have been released).
+            try
+            {
+                if (mutex.WaitOne(0)) return mutex;
+            }
+            catch (AbandonedMutexException)
+            {
+                return mutex; // its owner exited without releasing - ours now
+            }
+
+            Log.Info("Multi-instance: a Roblox client already holds its singleton mutex - relying on the event and separate paths.");
+            mutex.Dispose();
+            return null;
+        }
+        catch (Exception ex)
+        {
+            Log.Warn($"Multi-instance: could not take Roblox's singleton mutex: {ex.Message}");
+            return null;
+        }
     }
 
     /// <summary>
