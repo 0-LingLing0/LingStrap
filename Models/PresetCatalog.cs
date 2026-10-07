@@ -11,9 +11,7 @@ public class PresetSpec
     public required Dictionary<string, GbsFieldValue> GbsFields { get; init; }
     public required string Priority { get; init; }   // Low | BelowNormal | Normal | AboveNormal | High
     public bool OneCorePerClient { get; init; }
-    public int MemoryLimitMb { get; init; }
     public bool SmallWindows { get; init; }
-    public int MemoryBoostMb { get; init; }
 }
 
 /// <summary>The exact FastFlag/GBS/priority values each built-in preset applies.</summary>
@@ -200,11 +198,8 @@ public static class PresetCatalog
             },
             // Low also puts each client into Windows' efficiency mode - see LauncherService.
             Priority = "Low",
-            // Sized for ~15 clients on an 8 GB PC: 15 x 300 MB leaves Windows its few GB.
             OneCorePerClient = true,
-            MemoryLimitMb = 300,
             SmallWindows = true,
-            MemoryBoostMb = 500,
         },
 
         _ => throw new ArgumentOutOfRangeException(nameof(preset), preset, "Custom has no fixed preset spec."),

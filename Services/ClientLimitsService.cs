@@ -8,85 +8,40 @@ using System.Threading;
 namespace Lingstrap.Services;
 
 /// <summary>
-/// Caps what each running Roblox client may use, for running many accounts at once (the AFK preset):
-/// a single logical CPU per client, and a hard limit on how much RAM each one keeps resident.
+/// Farming helpers that work on Roblox clients from the outside with ordinary window and scheduling
+/// calls - the same things Task Manager or dragging a window can do: one CPU per client, small or
+/// minimized windows, and closing clients that are stuck.
+///
+/// It used to also cap each client's RAM (forcing its working set out to the page file) and CPU (a
+/// job object with a hard rate limit). Both changed how the running Roblox process behaves from
+/// outside, and were removed after an account was banned for "bypasses of our systems".
 ///
 /// Runs in its own detached process (-limitswatcher, the same pattern as the other watchers) so it
 /// keeps working when CloseLingstrapOnLaunch closes Lingstrap, and so clients launched later - each
 /// through its own short-lived Lingstrap - are picked up by the one watcher already running.
-///
-/// The memory limit doesn't free anything Roblox needs: Windows moves whatever is over the limit out
-/// to the page file and brings it back on demand. A client never runs out of memory and doesn't
-/// crash - it just slows down when it touches something that was moved out, which at 3 FPS, unattended,
-/// barely matters. That's what makes 15 clients fit in a few GB of RAM.
 /// </summary>
 public static class ClientLimitsService
 {
     private const string WatcherGuardMutexName = "Lingstrap_ClientLimitsWatcherActive";
     private const string WatcherArg = "-limitswatcher";
 
-    /// <summary>Loading a game touches far more memory than idling in it. Capping from the first
-    /// second made joining crawl, so a client gets this long before its limit applies.</summary>
-    private static readonly TimeSpan MemoryLimitDelay = TimeSpan.FromSeconds(45);
-
-    private const int QuotaLimitsHardwsMinDisable = 0x2;
-    private const int QuotaLimitsHardwsMaxEnable = 0x4;
-    private const int QuotaLimitsHardwsMaxDisable = 0x8;
-
     private static class Native
     {
-        [DllImport("kernel32.dll", SetLastError = true)]
-        public static extern bool SetProcessWorkingSetSizeEx(IntPtr process, IntPtr minimumWorkingSetSize,
-            IntPtr maximumWorkingSetSize, int flags);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        public static extern bool K32EmptyWorkingSet(IntPtr process);
-
-        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-        public static extern IntPtr CreateJobObject(IntPtr attributes, string? name);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        public static extern bool AssignProcessToJobObject(IntPtr job, IntPtr process);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        public static extern bool SetInformationJobObject(IntPtr job, int infoClass,
-            ref JOBOBJECT_CPU_RATE_CONTROL_INFORMATION info, uint length);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        public static extern bool SetInformationJobObject(IntPtr job, int infoClass,
-            ref JOBOBJECT_EXTENDED_LIMIT_INFORMATION info, uint length);
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        public static extern bool IsProcessInJob(IntPtr process, IntPtr job, out bool result);
-
-        [DllImport("kernel32.dll")]
-        public static extern bool CloseHandle(IntPtr handle);
-
         [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
         [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
-        [DllImport("user32.dll")] public static extern bool IsHungAppWindow(IntPtr hWnd);
         [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr hWnd);
         [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int cmd);
         [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
 
         [StructLayout(LayoutKind.Sequential)]
         public struct RECT { public int Left, Top, Right, Bottom; }
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        public static extern bool GetProcessWorkingSetSizeEx(IntPtr process, out IntPtr minimumWorkingSetSize,
-            out IntPtr maximumWorkingSetSize, out int flags);
     }
 
     public static bool AnyLimitOn =>
-        SettingsService.Current.OneCorePerClient || SettingsService.Current.MemoryLimitMb > 0
-        || SettingsService.Current.SmallWindows || SettingsService.Current.CpuLimitPercent > 0
+        SettingsService.Current.OneCorePerClient || SettingsService.Current.SmallWindows
         || SettingsService.Current.MinimizeAfterLoad || SettingsService.Current.AutoCloseStuck;
 
-    /// <summary>Clients whose window has already been shrunk - each one is, exactly once.</summary>
-    private static readonly Dictionary<int, DateTime> WindowFirstSeen = new();
-    private static readonly HashSet<int> ShrinkLogged = new();
-
-    /// <summary>Call once a Roblox client has started. Starts the watcher if a limit is on; a no-op
+    /// <summary>Call once a Roblox client has started. Starts the watcher if anything is on; a no-op
     /// if one is already running, since it covers every client by name.</summary>
     public static void OnRobloxStarted()
     {
@@ -118,8 +73,7 @@ public static class ClientLimitsService
         if (!isFirst) return;
 
         Log.Info("Client limits watcher started.");
-        var pinned = new Dictionary<int, int>();   // PID -> logical CPU it's locked to
-        var limited = new Dictionary<int, int>();  // PID -> MB limit applied
+        var pinned = new Dictionary<int, int>(); // PID -> logical CPU it's locked to
 
         try
         {
@@ -130,13 +84,13 @@ public static class ClientLimitsService
             var tick = 0;
             while (true)
             {
-                // Re-read every few seconds, so changing a limit in Lingstrap reaches running clients.
+                // Re-read every few seconds, so changing a setting in Lingstrap reaches running clients.
                 if (tick++ % 3 == 0) SettingsService.Load(quiet: true);
 
                 var clients = RobloxProcesses.Clients();
                 if (clients.Length == 0) break;
 
-                try { Enforce(clients, pinned, limited); }
+                try { Enforce(clients, pinned); }
                 catch (Exception ex) { Log.Warn($"Client limits: {ex.Message}"); }
                 finally { foreach (var c in clients) c.Dispose(); }
 
@@ -151,38 +105,15 @@ public static class ClientLimitsService
         Log.Info("Client limits watcher exiting - all Roblox clients closed.");
     }
 
-    private static void Enforce(Process[] clients, Dictionary<int, int> pinned, Dictionary<int, int> limited)
+    private static void Enforce(Process[] clients, Dictionary<int, int> pinned)
     {
         var s = SettingsService.Current;
         var alive = clients.Select(c => c.Id).ToHashSet();
         foreach (var gone in pinned.Keys.Where(id => !alive.Contains(id)).ToList()) pinned.Remove(gone);
-        foreach (var gone in limited.Keys.Where(id => !alive.Contains(id)).ToList()) limited.Remove(gone);
-        Reapplied.RemoveWhere(id => !alive.Contains(id));
-        ShrinkLogged.RemoveWhere(id => !alive.Contains(id));
-        Boosted.RemoveWhere(id => !alive.Contains(id));
-        foreach (var gone in LastNotResponding.Keys.Where(id => !alive.Contains(id)).ToList()) LastNotResponding.Remove(gone);
         foreach (var gone in WindowFirstSeen.Keys.Where(id => !alive.Contains(id)).ToList()) WindowFirstSeen.Remove(gone);
         foreach (var gone in WindowSeenAt.Keys.Where(id => !alive.Contains(id)).ToList()) WindowSeenAt.Remove(gone);
+        ShrinkLogged.RemoveWhere(id => !alive.Contains(id));
         Minimized.RemoveWhere(id => !alive.Contains(id));
-        Trimmed.RemoveWhere(id => !alive.Contains(id));
-        CpuCapFailed.RemoveWhere(id => !alive.Contains(id));
-
-        // All clients at once, not one by one: a single job can hold several (see ApplyCpu).
-        try { ApplyCpu(clients, s.CpuLimitPercent); }
-        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
-        {
-            // A client exited mid-way - the next pass sorts it out.
-        }
-
-        if (s.MemoryLimitMb > 0 && DateTime.UtcNow - _lastMemoryReport > TimeSpan.FromMinutes(1))
-        {
-            _lastMemoryReport = DateTime.UtcNow;
-            Log.Info("Client limits: RAM in use - " + string.Join(", ", clients.Select(c =>
-            {
-                try { c.Refresh(); return $"PID {c.Id} {c.WorkingSet64 / (1024 * 1024)} MB"; }
-                catch { return $"PID {c.Id} ?"; }
-            })) + $" (limit {s.MemoryLimitMb} MB).");
-        }
 
         // Stable order, so an existing client keeps its CPU when another starts or exits.
         foreach (var client in clients.OrderBy(SafeStartTime))
@@ -190,7 +121,6 @@ public static class ClientLimitsService
             try
             {
                 ApplyCore(client, s.OneCorePerClient, pinned);
-                ApplyMemory(client, s.MemoryLimitMb, s.MemoryBoostMb, limited);
                 if (s.SmallWindows) ShrinkWindowOf(client);
                 if (s.MinimizeAfterLoad) MinimizeOnceLoaded(client);
             }
@@ -207,78 +137,7 @@ public static class ClientLimitsService
         }
     }
 
-    // ---- Minimize after loading ------------------------------------------------------------
-
-    /// <summary>Long enough for a client to load into its game before it's tucked away.</summary>
-    private static readonly TimeSpan MinimizeAfter = TimeSpan.FromMinutes(1);
-    private static readonly Dictionary<int, DateTime> WindowSeenAt = new();
-    private static readonly HashSet<int> Minimized = new();
-
-    /// <summary>
-    /// Minimizes the client's window once, a minute after it first appeared. A minimized Roblox
-    /// draws next to nothing. Only once: restoring a window by hand keeps it restored.
-    /// </summary>
-    private static void MinimizeOnceLoaded(Process client)
-    {
-        if (Minimized.Contains(client.Id)) return;
-
-        client.Refresh();
-        var hwnd = client.MainWindowHandle;
-        if (hwnd == IntPtr.Zero) return;
-
-        if (!WindowSeenAt.TryGetValue(client.Id, out var seen))
-        {
-            WindowSeenAt[client.Id] = DateTime.UtcNow;
-            return;
-        }
-        if (DateTime.UtcNow - seen < MinimizeAfter) return;
-
-        const int SwShowMinNoActive = 7; // minimize without stealing focus from whatever's in front
-        Native.ShowWindow(hwnd, SwShowMinNoActive);
-        Minimized.Add(client.Id);
-        Log.Info($"Client limits: minimized PID {client.Id}'s window.");
-    }
-
-    // ---- Auto-close stuck clients ----------------------------------------------------------
-
-    private static readonly TimeSpan StuckCheckInterval = TimeSpan.FromSeconds(30);
-    private static readonly TimeSpan NoWindowGrace = TimeSpan.FromMinutes(1);
-    private static readonly TimeSpan NotRespondingGrace = TimeSpan.FromMinutes(3);
-    private static DateTime _lastStuckCheck = DateTime.MinValue;
-    private static readonly Dictionary<int, DateTime> StuckSince = new();
-
-    /// <summary>
-    /// Closes clients that have been without a window (a leftover from a closed or crashed account)
-    /// or Not Responding for a good while - checked every 30 seconds, and only once a client has been
-    /// stuck across checks, so a client that's merely busy for a moment is never touched.
-    /// </summary>
-    private static void CloseLongStuck(HashSet<int> alive)
-    {
-        foreach (var gone in StuckSince.Keys.Where(id => !alive.Contains(id)).ToList()) StuckSince.Remove(gone);
-
-        var stuck = StuckAccountService.Find()
-            .Where(x => x.Problem != StuckAccountService.Problem.CrashHandler)
-            .ToList();
-        foreach (var notStuck in StuckSince.Keys.Where(id => stuck.All(x => x.Pid != id)).ToList()) StuckSince.Remove(notStuck);
-
-        var toClose = new List<StuckAccountService.StuckProcess>();
-        foreach (var x in stuck)
-        {
-            if (!StuckSince.TryGetValue(x.Pid, out var since))
-            {
-                StuckSince[x.Pid] = DateTime.UtcNow;
-                continue;
-            }
-
-            var grace = x.Problem == StuckAccountService.Problem.NoWindow ? NoWindowGrace : NotRespondingGrace;
-            if (DateTime.UtcNow - since >= grace) toClose.Add(x);
-        }
-
-        if (toClose.Count == 0) return;
-        Log.Info("Client limits: closing stuck clients - " + string.Join(", ", toClose.Select(x => $"PID {x.Pid} ({x.Problem})")));
-        StuckAccountService.Close(toClose);
-        foreach (var x in toClose) StuckSince.Remove(x.Pid);
-    }
+    // ---- One core per client -------------------------------------------------------------
 
     private static void ApplyCore(Process client, bool on, Dictionary<int, int> pinned)
     {
@@ -332,255 +191,16 @@ public static class ClientLimitsService
         return order.OrderBy(c => use.GetValueOrDefault(c)).ThenBy(c => order.IndexOf(c)).First();
     }
 
-    /// <summary>How long a client has to respond normally again before a raised cap drops back -
-    /// without it, a client that stalls on and off would bounce between the two every few seconds.</summary>
-    private static readonly TimeSpan BoostRecovery = TimeSpan.FromSeconds(15);
+    // ---- Small windows -------------------------------------------------------------------
 
-    private static readonly Dictionary<int, DateTime> LastNotResponding = new();
-    private static readonly HashSet<int> Boosted = new();
-
-    /// <summary>
-    /// The cap to use right now: the boost while the client's window is "Not Responding" (and for
-    /// BoostRecovery after), the normal limit otherwise. A very low cap can starve a client badly
-    /// enough to freeze it - mostly while it loads a new area - and more room is exactly what gets
-    /// it moving again; once it's fine, the low cap comes back.
-    /// </summary>
-    private static int EffectiveLimit(Process client, int limitMb, int boostMb)
-    {
-        if (boostMb <= limitMb)
-        {
-            Boosted.Remove(client.Id);
-            return limitMb;
-        }
-
-        var boost = IsStruggling(client);
-        if (boost && Boosted.Add(client.Id))
-            Log.Info($"Client limits: PID {client.Id} is not responding - memory cap raised to {boostMb} MB until it recovers.");
-        else if (!boost && Boosted.Remove(client.Id))
-            Log.Info($"Client limits: PID {client.Id} is responding again - memory cap back to {limitMb} MB.");
-
-        return boost ? boostMb : limitMb;
-    }
-
-    /// <summary>Whether the client's window is "Not Responding", or was within BoostRecovery -
-    /// shared by the memory boost and the CPU cap, which both ease off while it is.</summary>
-    private static bool IsStruggling(Process client)
-    {
-        client.Refresh();
-        var hwnd = client.MainWindowHandle;
-        // IsHungAppWindow answers instantly (Windows' own "Not Responding" test), where
-        // Process.Responding waits up to 5 seconds per client for a reply.
-        if (hwnd != IntPtr.Zero && Native.IsHungAppWindow(hwnd))
-            LastNotResponding[client.Id] = DateTime.UtcNow;
-
-        return LastNotResponding.TryGetValue(client.Id, out var at) && DateTime.UtcNow - at < BoostRecovery;
-    }
-
-    private const int JobObjectCpuRateControlInformation = 15;
-    private const uint CpuRateControlEnable = 0x1;
-    private const uint CpuRateControlHardCap = 0x4;
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct JOBOBJECT_CPU_RATE_CONTROL_INFORMATION
-    {
-        public uint ControlFlags;
-        public uint CpuRate; // 1/100ths of a percent of the whole machine's CPU
-    }
-
-    private const int JobObjectExtendedLimitInformation = 9;
-    private const uint JobObjectLimitSilentBreakawayOk = 0x00001000;
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct JOBOBJECT_BASIC_LIMIT_INFORMATION
-    {
-        public long PerProcessUserTimeLimit;
-        public long PerJobUserTimeLimit;
-        public uint LimitFlags;
-        public UIntPtr MinimumWorkingSetSize;
-        public UIntPtr MaximumWorkingSetSize;
-        public uint ActiveProcessLimit;
-        public UIntPtr Affinity;
-        public uint PriorityClass;
-        public uint SchedulingClass;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct IO_COUNTERS
-    {
-        public ulong ReadOperationCount, WriteOperationCount, OtherOperationCount;
-        public ulong ReadTransferCount, WriteTransferCount, OtherTransferCount;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct JOBOBJECT_EXTENDED_LIMIT_INFORMATION
-    {
-        public JOBOBJECT_BASIC_LIMIT_INFORMATION BasicLimitInformation;
-        public IO_COUNTERS IoInfo;
-        public UIntPtr ProcessMemoryLimit;
-        public UIntPtr JobMemoryLimit;
-        public UIntPtr PeakProcessMemoryUsed;
-        public UIntPtr PeakJobMemoryUsed;
-    }
-
-    /// <summary>A job object Lingstrap created to cap a client's CPU, and what it last set on it.</summary>
-    private sealed class CpuJob
-    {
-        public IntPtr Handle;
-        public int Rate = -1;   // 1/100ths of a percent; 0 = uncapped, -1 = never set
-        public int Members;
-    }
-
-    private static readonly List<CpuJob> CpuJobs = new();
-    private static readonly HashSet<int> CpuCapFailed = new();
-
-    /// <summary>
-    /// Caps each client's CPU with a job object's hard rate limit: Windows itself won't schedule it
-    /// past that share of the machine, whatever the game asks for. Lifted entirely while a client is
-    /// "Not Responding" (and BoostRecovery after), so one that fell behind can catch up instead of
-    /// being held down until it drops.
-    ///
-    /// Sized per job, not per client. Roblox starts new clients itself (joining a game from inside
-    /// Roblox), and a process started from inside a job lands in that same job - so one job can hold
-    /// several clients, and a fixed per-job cap made them share it: three clients on 1% between them,
-    /// starved until they froze and closed each other. Each job now gets the limit times the number
-    /// of clients in it. The job is also asked to let new processes leave it, which takes them out
-    /// entirely where Windows allows it - but counting doesn't depend on that working.
-    /// </summary>
-    private static void ApplyCpu(Process[] clients, double percent)
-    {
-        var members = CpuJobs.ToDictionary(j => j, _ => new List<Process>());
-
-        foreach (var client in clients)
-        {
-            if (CpuCapFailed.Contains(client.Id)) continue;
-
-            var job = CpuJobs.FirstOrDefault(j => Native.IsProcessInJob(client.Handle, j.Handle, out var inJob) && inJob);
-            if (job == null)
-            {
-                if (percent <= 0) continue; // never capped, nothing to do
-                job = CreateCpuJob(client);
-                if (job == null) continue;
-                CpuJobs.Add(job);
-                members[job] = new List<Process>();
-            }
-            members[job].Add(client);
-        }
-
-        foreach (var (job, inJob) in members)
-        {
-            if (inJob.Count == 0)
-            {
-                Native.CloseHandle(job.Handle);
-                CpuJobs.Remove(job);
-                continue;
-            }
-
-            var struggling = percent > 0 && inJob.Count(IsStruggling) > 0;
-            var rate = percent <= 0 || struggling
-                ? 0
-                : Math.Clamp((int)Math.Round(percent * 100 * inJob.Count), 1, 10000);
-            if (rate == job.Rate && inJob.Count == job.Members) continue;
-
-            var info = new JOBOBJECT_CPU_RATE_CONTROL_INFORMATION
-            {
-                ControlFlags = rate == 0 ? 0 : CpuRateControlEnable | CpuRateControlHardCap,
-                CpuRate = (uint)rate,
-            };
-            var pids = string.Join(", ", inJob.Select(c => c.Id));
-            if (!Native.SetInformationJobObject(job.Handle, JobObjectCpuRateControlInformation, ref info,
-                    (uint)Marshal.SizeOf<JOBOBJECT_CPU_RATE_CONTROL_INFORMATION>()))
-            {
-                Log.Warn($"Client limits: could not set the CPU cap for PID {pids} (Win32 error {Marshal.GetLastWin32Error()}).");
-                continue;
-            }
-
-            Log.Info(rate == 0
-                ? struggling
-                    ? $"Client limits: PID {pids} not responding - CPU cap lifted until it recovers."
-                    : $"Client limits: CPU cap removed from PID {pids}."
-                : inJob.Count == 1
-                    ? $"Client limits: PID {pids} capped at {percent}% CPU."
-                    : $"Client limits: PID {pids} share one cap (Roblox started them from one another) - set to {rate / 100.0}%, {percent}% each.");
-
-            job.Rate = rate;
-            job.Members = inJob.Count;
-        }
-    }
-
-    private static CpuJob? CreateCpuJob(Process client)
-    {
-        var handle = Native.CreateJobObject(IntPtr.Zero, null);
-        if (handle != IntPtr.Zero)
-        {
-            var limits = new JOBOBJECT_EXTENDED_LIMIT_INFORMATION();
-            limits.BasicLimitInformation.LimitFlags = JobObjectLimitSilentBreakawayOk;
-            Native.SetInformationJobObject(handle, JobObjectExtendedLimitInformation, ref limits,
-                (uint)Marshal.SizeOf<JOBOBJECT_EXTENDED_LIMIT_INFORMATION>()); // best effort, see ApplyCpu
-
-            if (Native.AssignProcessToJobObject(handle, client.Handle))
-                return new CpuJob { Handle = handle };
-        }
-
-        Log.Warn($"Client limits: could not cap PID {client.Id}'s CPU (Win32 error {Marshal.GetLastWin32Error()}).");
-        if (handle != IntPtr.Zero) Native.CloseHandle(handle);
-        CpuCapFailed.Add(client.Id);
-        return null;
-    }
-    private static void ApplyMemory(Process client, int limitMb, int boostMb, Dictionary<int, int> limited)
-    {
-        if (limitMb <= 0)
-        {
-            if (limited.Remove(client.Id))
-            {
-                // Real sizes, not -1/-1: that pair means "empty the working set" and the flags are ignored.
-                Native.GetProcessWorkingSetSizeEx(client.Handle, out var oldMin, out var oldMax, out _);
-                Native.SetProcessWorkingSetSizeEx(client.Handle, oldMin, oldMax, QuotaLimitsHardwsMinDisable | QuotaLimitsHardwsMaxDisable);
-                Log.Info($"Client limits: memory limit removed from PID {client.Id}.");
-            }
-            return;
-        }
-
-        if (DateTime.Now - SafeStartTime(client) < MemoryLimitDelay) return;
-
-        limitMb = EffectiveLimit(client, limitMb, boostMb);
-        var max = (long)limitMb * 1024 * 1024;
-        var min = Math.Min(16L * 1024 * 1024, max / 4);
-        var firstTime = !limited.ContainsKey(client.Id);
-
-        // Checked every pass, not set once: in testing the cap was accepted and Roblox still grew
-        // well past it, so something on Roblox's side resets it. Put it back whenever it's gone.
-        var capInPlace = Native.GetProcessWorkingSetSizeEx(client.Handle, out _, out var currentMax, out var flags)
-                         && (flags & QuotaLimitsHardwsMaxEnable) != 0 && (long)currentMax == max;
-        if (!capInPlace)
-        {
-            if (Native.SetProcessWorkingSetSizeEx(client.Handle, (IntPtr)min, (IntPtr)max,
-                    QuotaLimitsHardwsMinDisable | QuotaLimitsHardwsMaxEnable))
-            {
-                if (firstTime) Log.Info($"Client limits: PID {client.Id} limited to {limitMb} MB of RAM.");
-                else if (Reapplied.Add(client.Id)) Log.Info($"Client limits: PID {client.Id} had its memory cap removed - putting it back (logged once).");
-            }
-            else if (firstTime)
-            {
-                Log.Warn($"Client limits: could not cap PID {client.Id}'s memory (Win32 error {Marshal.GetLastWin32Error()}) - trimming it instead.");
-            }
-        }
-        limited[client.Id] = limitMb;
-
-        // And the part that holds regardless of the cap: whenever the client is over its limit, move
-        // everything it isn't actively using out of RAM. Windows pages it back in on demand.
-        client.Refresh();
-        if (client.WorkingSet64 > max && Native.K32EmptyWorkingSet(client.Handle) && Trimmed.Add(client.Id))
-            Log.Info($"Client limits: PID {client.Id} was over {limitMb} MB - trimming it whenever that happens (logged once).");
-    }
-
-    private static DateTime _lastMemoryReport = DateTime.MinValue;
-    private static readonly HashSet<int> Reapplied = new();
-    private static readonly HashSet<int> Trimmed = new();
+    /// <summary>Clients whose window has already been shrunk - each one is, exactly once.</summary>
+    private static readonly Dictionary<int, DateTime> WindowFirstSeen = new();
+    private static readonly HashSet<int> ShrinkLogged = new();
 
     /// <summary>
     /// Asks the window to be 1x1 and lets Roblox refuse: a window enforces its own minimum size, so
-    /// whatever it ends up at IS the smallest Roblox allows, without hardcoding a number that a
-    /// future Roblox update could change. Keeps the window where it is, and only happens once.
+    /// whatever it ends up at IS the smallest Roblox allows. Keeps the window where it is, and only
+    /// happens once.
     /// </summary>
     private static void ShrinkWindowOf(Process client)
     {
@@ -603,6 +223,79 @@ public static class ClientLimitsService
         if (ShrinkLogged.Add(client.Id))
             Log.Info($"Client limits: PID {client.Id} window shrunk from {before.Right - before.Left}x{before.Bottom - before.Top} " +
                      $"to {after.Right - after.Left}x{after.Bottom - after.Top} (the smallest Roblox allows).");
+    }
+
+    // ---- Minimize after loading ----------------------------------------------------------
+
+    /// <summary>Long enough for a client to load into its game before it's tucked away.</summary>
+    private static readonly TimeSpan MinimizeAfter = TimeSpan.FromMinutes(1);
+    private static readonly Dictionary<int, DateTime> WindowSeenAt = new();
+    private static readonly HashSet<int> Minimized = new();
+
+    /// <summary>
+    /// Minimizes the client's window once, a minute after it first appeared. A minimized Roblox
+    /// draws next to nothing. Only once: restoring a window by hand keeps it restored.
+    /// </summary>
+    private static void MinimizeOnceLoaded(Process client)
+    {
+        if (Minimized.Contains(client.Id)) return;
+
+        client.Refresh();
+        var hwnd = client.MainWindowHandle;
+        if (hwnd == IntPtr.Zero) return;
+
+        if (!WindowSeenAt.TryGetValue(client.Id, out var seen))
+        {
+            WindowSeenAt[client.Id] = DateTime.UtcNow;
+            return;
+        }
+        if (DateTime.UtcNow - seen < MinimizeAfter) return;
+
+        const int SwShowMinNoActive = 7; // minimize without stealing focus from whatever's in front
+        Native.ShowWindow(hwnd, SwShowMinNoActive);
+        Minimized.Add(client.Id);
+        Log.Info($"Client limits: minimized PID {client.Id}'s window.");
+    }
+
+    // ---- Auto-close stuck clients --------------------------------------------------------
+
+    private static readonly TimeSpan StuckCheckInterval = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan NoWindowGrace = TimeSpan.FromMinutes(1);
+    private static readonly TimeSpan NotRespondingGrace = TimeSpan.FromMinutes(3);
+    private static DateTime _lastStuckCheck = DateTime.MinValue;
+    private static readonly Dictionary<int, DateTime> StuckSince = new();
+
+    /// <summary>
+    /// Closes clients that have been without a window (a leftover from a closed or crashed account)
+    /// or Not Responding for a good while - checked every 30 seconds, and only once a client has been
+    /// stuck across checks, so a client that's merely busy for a moment is never touched.
+    /// </summary>
+    private static void CloseLongStuck(HashSet<int> alive)
+    {
+        foreach (var gone in StuckSince.Keys.Where(id => !alive.Contains(id)).ToList()) StuckSince.Remove(gone);
+
+        var stuck = StuckAccountService.Find()
+            .Where(x => x.Problem != StuckAccountService.Problem.CrashHandler)
+            .ToList();
+        foreach (var notStuck in StuckSince.Keys.Where(id => stuck.All(x => x.Pid != id)).ToList()) StuckSince.Remove(notStuck);
+
+        var toClose = new List<StuckAccountService.StuckProcess>();
+        foreach (var x in stuck)
+        {
+            if (!StuckSince.TryGetValue(x.Pid, out var since))
+            {
+                StuckSince[x.Pid] = DateTime.UtcNow;
+                continue;
+            }
+
+            var grace = x.Problem == StuckAccountService.Problem.NoWindow ? NoWindowGrace : NotRespondingGrace;
+            if (DateTime.UtcNow - since >= grace) toClose.Add(x);
+        }
+
+        if (toClose.Count == 0) return;
+        Log.Info("Client limits: closing stuck clients - " + string.Join(", ", toClose.Select(x => $"PID {x.Pid} ({x.Problem})")));
+        StuckAccountService.Close(toClose);
+        foreach (var x in toClose) StuckSince.Remove(x.Pid);
     }
 
     private static IntPtr AllCoresMask() =>

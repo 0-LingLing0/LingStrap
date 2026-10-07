@@ -16,16 +16,13 @@
         <Border Style="{StaticResource SettingsGroup}">
             <StackPanel>
                 <v:SettingRow Title="AFK preset"
-                              Description="3 FPS, lowest graphics, Roblox's sound/chat/UI off, low priority with efficiency mode, one core per account, 300 MB memory limit and small windows - all in one click. Switching to another preset puts your Roblox settings back.">
+                              Description="3 FPS, lowest graphics, Roblox's sound/chat/UI off, low priority with efficiency mode, one core per account and small windows - all in one click. Switching to another preset puts your Roblox settings back.">
                     <Button Content="Apply AFK preset" Click="ApplyAfk_Click" />
                 </v:SettingRow>
 
                 <v:SettingRow x:Name="StatusRow" Title="Running accounts" ShowDivider="False"
-                              Description="Checks what's stopping multi-instance, or closes accounts that are stuck.">
-                    <StackPanel Orientation="Horizontal">
-                        <Button Content="Check multi-instance" Click="CheckMulti_Click" />
-                        <Button Content="Close stuck accounts" Margin="8,0,0,0" Click="CloseStuck_Click" />
-                    </StackPanel>
+                              Description="Closes accounts that are stuck - Not Responding, or left running without a window.">
+                    <Button Content="Close stuck accounts" Click="CloseStuck_Click" />
                 </v:SettingRow>
             </StackPanel>
         </Border>
@@ -34,7 +31,7 @@
         <Border Style="{StaticResource SettingsGroup}">
             <StackPanel>
                 <v:SettingRow Title="Allow multi-instance launching"
-                              Description="Lets every account run in its own Roblox window. Each extra account starts from its own path to the same Roblox install, and Roblox's close-the-others signal is blocked.">
+                              Description="Lets more than one Roblox window run, the way other launchers always have. Roblox actively works against this, so it may not work on every Roblox version.">
                     <ui:ToggleSwitch x:Name="ChkMulti" Checked="Setting_Changed" Unchecked="Setting_Changed" />
                 </v:SettingRow>
 
@@ -74,56 +71,12 @@
                     </ComboBox>
                 </v:SettingRow>
 
-                <v:SettingRow Title="One core per account"
+                <v:SettingRow Title="One core per account" ShowDivider="False"
                               Description="Locks every Roblox window to a single CPU thread, spread over separate cores, so many accounts can't take over your whole CPU.">
                     <ui:ToggleSwitch x:Name="ChkOneCore" Checked="Setting_Changed" Unchecked="Setting_Changed" />
                 </v:SettingRow>
-
-                <v:SettingRow Title="CPU limit per account" ShowDivider="False"
-                              Description="A hard cap per Roblox window, in % of your whole CPU (as Task Manager shows it). Lifted while a window is Not Responding so it can catch up. Lower than 2% made accounts unstable.">
-                    <ComboBox x:Name="CpuLimitCombo" MinWidth="130" SelectionChanged="Setting_Changed">
-                        <ComboBoxItem Content="Off" Tag="0" />
-                        <ComboBoxItem Content="2%" Tag="2" />
-                        <ComboBoxItem Content="3%" Tag="3" />
-                        <ComboBoxItem Content="5%" Tag="5" />
-                    </ComboBox>
-                </v:SettingRow>
             </StackPanel>
         </Border>
-
-        <TextBlock Text="MEMORY" Style="{StaticResource SectionCaption}" />
-        <Border Style="{StaticResource SettingsGroup}">
-            <StackPanel>
-                <v:SettingRow Title="Memory limit per account"
-                              Description="Caps how much RAM each Roblox window keeps; the rest moves to the page file on disk. Nothing crashes, but a game you play yourself will stutter. Starts 45 seconds after a window opens, so joining stays quick.">
-                    <ComboBox x:Name="MemoryLimitCombo" MinWidth="130" SelectionChanged="Setting_Changed">
-                        <ComboBoxItem Content="Off" Tag="0" />
-                        <ComboBoxItem Content="1 MB (not recommended - very unstable)" Tag="1" />
-                        <ComboBoxItem Content="100 MB" Tag="100" />
-                        <ComboBoxItem Content="150 MB" Tag="150" />
-                        <ComboBoxItem Content="200 MB" Tag="200" />
-                        <ComboBoxItem Content="300 MB" Tag="300" />
-                        <ComboBoxItem Content="500 MB" Tag="500" />
-                        <ComboBoxItem Content="750 MB" Tag="750" />
-                        <ComboBoxItem Content="1 GB" Tag="1024" />
-                        <ComboBoxItem Content="1.5 GB" Tag="1536" />
-                    </ComboBox>
-                </v:SettingRow>
-
-                <v:SettingRow Title="Memory while not responding" ShowDivider="False"
-                              Description="While a window is Not Responding its memory limit goes up to this, and drops back once it has responded for 15 seconds. Gets frozen accounts moving again.">
-                    <ComboBox x:Name="MemoryBoostCombo" MinWidth="130" SelectionChanged="Setting_Changed">
-                        <ComboBoxItem Content="No boost" Tag="0" />
-                        <ComboBoxItem Content="250 MB" Tag="250" />
-                        <ComboBoxItem Content="500 MB" Tag="500" />
-                        <ComboBoxItem Content="750 MB" Tag="750" />
-                        <ComboBoxItem Content="1 GB" Tag="1024" />
-                        <ComboBoxItem Content="1.5 GB" Tag="1536" />
-                    </ComboBox>
-                </v:SettingRow>
-            </StackPanel>
-        </Border>
-
         <TextBlock Text="NETWORK" Style="{StaticResource SectionCaption}" />
         <Border Style="{StaticResource SettingsGroup}">
             <StackPanel>

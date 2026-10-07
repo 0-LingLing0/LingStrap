@@ -128,16 +128,6 @@ public class LingstrapSettings
     /// <summary>Lock every Roblox client to a single logical CPU (ClientLimitsService).</summary>
     public bool OneCorePerClient { get; set; }
 
-    /// <summary>Hard cap on each Roblox client's resident RAM in MB, 0 for none (ClientLimitsService).</summary>
-    public int MemoryLimitMb { get; set; }
-
-    /// <summary>The cap a client gets instead while its window is "Not Responding", 0 for no boost.</summary>
-    public int MemoryBoostMb { get; set; }
-
-    /// <summary>Hard cap on each client's CPU, in percent of the whole machine (as Task Manager shows
-    /// it), 0 for none. Not part of any preset - the right value depends on the game and the PC.</summary>
-    public double CpuLimitPercent { get; set; }
-
     /// <summary>Minimize each Roblox window once, a minute after it opens (ClientLimitsService).</summary>
     public bool MinimizeAfterLoad { get; set; }
 

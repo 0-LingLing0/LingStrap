@@ -41,9 +41,6 @@ public partial class FarmingView : Page
             "Low" => 4,
             _ => 0,
         };
-        Select(MemoryLimitCombo, s.MemoryLimitMb.ToString());
-        Select(MemoryBoostCombo, s.MemoryBoostMb.ToString());
-        Select(CpuLimitCombo, s.CpuLimitPercent.ToString(CultureInfo.InvariantCulture));
         RefreshNetworkRow();
 
         var extrasOn = s.ShowFpsOverlay || s.DiscordRichPresence || s.ShowServerLocation;
@@ -58,7 +55,7 @@ public partial class FarmingView : Page
         var running = RobloxProcesses.Count();
         StatusRow.Title = running == 0
             ? "No accounts running"
-            : $"{running} account{(running == 1 ? "" : "s")} running" + (MultiInstanceWatcher.IsArmed() ? " - multi-instance ready" : "");
+            : $"{running} account{(running == 1 ? "" : "s")} running";
     }
 
     private static void Select(ComboBox combo, string tag) =>
@@ -72,26 +69,9 @@ public partial class FarmingView : Page
         if (_loading) return;
         var s = SettingsService.Current;
 
-        // The 1 MB novelty limit gets a warning before it's taken: it's offered for fun, not use.
-        if (ReferenceEquals(sender, MemoryLimitCombo) && IntTag(MemoryLimitCombo) == 1 && s.MemoryLimitMb != 1)
-        {
-            var sure = await DialogHelper.ShowConfirmAsync(this,
-                "A 1 MB memory limit is not smart to use and really unstable. Roblox will barely move, " +
-                "keep going \"Not Responding\" and can disconnect or crash. It's only here for fun - " +
-                "don't use it on accounts you're farming with.",
-                "Really use 1 MB?", confirmText: "Use it anyway");
-            if (!sure)
-            {
-                _loading = true;
-                Select(MemoryLimitCombo, s.MemoryLimitMb.ToString());
-                _loading = false;
-                return;
-            }
-        }
-
         // Settings that presets set: changing one by hand makes the active preset Custom, the same
         // as on every other page.
-        var presetBefore = (s.ProcessPriority, s.OneCorePerClient, s.MemoryLimitMb, s.MemoryBoostMb, s.SmallWindows);
+        var presetBefore = (s.ProcessPriority, s.OneCorePerClient, s.SmallWindows);
 
         s.MultiInstance = ChkMulti.IsChecked == true;
         s.AutoCloseStuck = ChkAutoCloseStuck.IsChecked == true;
@@ -107,12 +87,8 @@ public partial class FarmingView : Page
             4 => "Low",
             _ => "Normal",
         };
-        s.MemoryLimitMb = IntTag(MemoryLimitCombo);
-        s.MemoryBoostMb = IntTag(MemoryBoostCombo);
-        s.CpuLimitPercent = CpuLimitCombo.SelectedItem is ComboBoxItem { Tag: string cpuTag }
-            && double.TryParse(cpuTag, NumberStyles.Float, CultureInfo.InvariantCulture, out var cpu) ? cpu : 0;
 
-        if (presetBefore != (s.ProcessPriority, s.OneCorePerClient, s.MemoryLimitMb, s.MemoryBoostMb, s.SmallWindows))
+        if (presetBefore != (s.ProcessPriority, s.OneCorePerClient, s.SmallWindows))
             PresetService.MarkCustom();
         SettingsService.Save();
 
@@ -176,12 +152,6 @@ public partial class FarmingView : Page
         DiscordPresenceService.Stop();
         Log.Info("Lightweight mode: FPS overlay, Discord status and server-location popup turned off.");
         LoadFromSettings();
-    }
-
-    private async void CheckMulti_Click(object sender, RoutedEventArgs e)
-    {
-        await FarmingActions.CheckMultiInstanceAsync(this);
-        RefreshStatus();
     }
 
     private async void CloseStuck_Click(object sender, RoutedEventArgs e)
