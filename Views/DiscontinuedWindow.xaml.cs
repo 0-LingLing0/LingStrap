@@ -25,6 +25,24 @@ public partial class DiscontinuedWindow : FluentWindow
 
     private void GitHub_Click(object sender, RoutedEventArgs e) => Open(GitHubUrl);
 
+    private async void Remove_Click(object sender, RoutedEventArgs e)
+    {
+        var answer = System.Windows.MessageBox.Show(this,
+            "This deletes Lingstrap completely: the app, its settings, logs, mods, shortcuts, and what it " +
+            "changed in Windows and Roblox. Roblox itself stays installed.\n\n" +
+            "Windows may ask for administrator approval to undo network changes.\n\nDelete Lingstrap?",
+            "Delete Lingstrap", System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Warning);
+        if (answer != System.Windows.MessageBoxResult.Yes) return;
+
+        RemoveButton.IsEnabled = false;
+        RemoveButton.Content = "Deleting...";
+        await System.Threading.Tasks.Task.Run(LingstrapRemover.RemoveEverything);
+
+        System.Windows.MessageBox.Show(this, "Lingstrap has been removed from this PC.", "Lingstrap",
+            System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Information);
+        Close();
+    }
+
     private static void Open(string url)
     {
         try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = url, UseShellExecute = true }); }

@@ -107,6 +107,14 @@ public partial class App : Application
         Paths.EnsureCreated();
         Log.Info($"Lingstrap starting. args=[{string.Join(' ', LaunchArgs)}]");
 
+        if (LaunchArgs.Length > 0 && LaunchArgs[0].Equals(LingstrapRemover.ElevatedArg, StringComparison.OrdinalIgnoreCase))
+        {
+            _isWatcherMode = true;
+            LingstrapRemover.RunElevated();
+            Shutdown();
+            return;
+        }
+
         // Lingstrap is discontinued: no helper runs anymore. One started by an older version (or the
         // FPS scheduled task) exits straight away, and the helper modes below are no longer reached.
         if (LaunchArgs.Length > 0 && Array.Exists(HelperModes, m => m.Equals(LaunchArgs[0], StringComparison.OrdinalIgnoreCase)))
