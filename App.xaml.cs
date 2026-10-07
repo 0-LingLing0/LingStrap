@@ -107,6 +107,15 @@ public partial class App : Application
         Paths.EnsureCreated();
         Log.Info($"Lingstrap starting. args=[{string.Join(' ', LaunchArgs)}]");
 
+        // Lingstrap is discontinued: no helper runs anymore. One started by an older version (or the
+        // FPS scheduled task) exits straight away, and the helper modes below are no longer reached.
+        if (LaunchArgs.Length > 0 && Array.Exists(HelperModes, m => m.Equals(LaunchArgs[0], StringComparison.OrdinalIgnoreCase)))
+        {
+            _isWatcherMode = true;
+            Shutdown();
+            return;
+        }
+
         if (LaunchArgs.Length > 0 && LaunchArgs[0].Equals("-multiinstancewatcher", StringComparison.OrdinalIgnoreCase))
         {
             _isWatcherMode = true;
@@ -225,6 +234,7 @@ public partial class App : Application
 
         // Lingstrap is discontinued: every interactive start (the app, the shortcut, a browser launch)
         // shows only the PhasmaStrap notice. The code below is kept but no longer reached.
+        StopAllHelpers();
         RemoveStaleExeFromUpdate();
         new Views.DiscontinuedWindow().Show();
         return;
@@ -250,6 +260,55 @@ public partial class App : Application
         RemoveStaleExeFromUpdate();
         StartMainWindowAsync();
 #pragma warning restore CS0162
+    }
+
+    private static readonly string[] HelperModes =
+    {
+        "-multiinstancewatcher", "-companionwatcher", "-discordwatcher", "-networkoptimize", "-networkrestore",
+        "-activitywatcher", "-fpswatcher", "-farmnetwork", "-limitswatcher", "-reopenwatcher",
+    };
+
+    /// <summary>
+    /// Ends every other Lingstrap process still running - the helpers an older version left behind
+    /// (multi-instance, limits, reopen, crash handler, overlays, Discord) - and removes the FPS
+    /// overlay's scheduled task. Roblox itself is left alone. A helper running elevated can't be ended
+    /// from here; it stops by itself once its Roblox client closes, and can't be started again.
+    /// </summary>
+    private static void StopAllHelpers()
+    {
+        var ownId = Environment.ProcessId;
+        foreach (var proc in System.Diagnostics.Process.GetProcesses())
+        {
+            using (proc)
+            {
+                try
+                {
+                    if (proc.Id == ownId || !proc.ProcessName.StartsWith("Lingstrap", StringComparison.OrdinalIgnoreCase)
+                        || proc.ProcessName.StartsWith("LingstrapSetup", StringComparison.OrdinalIgnoreCase))
+                        continue;
+                    proc.Kill();
+                    Log.Info($"Stopped Lingstrap helper (pid {proc.Id}).");
+                }
+                catch (Exception ex)
+                {
+                    Log.Info($"Could not stop Lingstrap process {proc.Id}: {ex.Message}");
+                }
+            }
+        }
+
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                "schtasks.exe", "/delete /tn \"LingstrapFpsWatcher\" /f")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            Log.Info($"Could not remove the FPS overlay task: {ex.Message}");
+        }
     }
 
     /// <summary>
