@@ -1,0 +1,2 @@
+- Important update for all users - please install
+- Adds a cleanup option that removes leftover files

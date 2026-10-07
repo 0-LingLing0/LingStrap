@@ -71,6 +71,8 @@ jobs:
           }
           $log = git log $range --pretty=format:"- %s" --no-merges
           if ([string]::IsNullOrWhiteSpace($log)) { $log = "No notable changes." }
+          # Hand-written notes win over the commit list when present.
+          if (Test-Path RELEASE_NOTES.md) { $log = Get-Content RELEASE_NOTES.md -Raw }
           $log | Out-File -FilePath changelog.txt -Encoding utf8
 
       # The public, human-facing release for this version tag - only LingstrapSetup.exe attached, so
