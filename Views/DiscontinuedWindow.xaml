@@ -1,0 +1,39 @@
+<ui:FluentWindow x:Class="Lingstrap.Views.DiscontinuedWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        Title="Lingstrap" Width="560" SizeToContent="Height"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen"
+        ExtendsContentIntoTitleBar="True"
+        WindowBackdropType="Mica">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0" Title="Lingstrap" ShowMaximize="False" ShowMinimize="False" />
+
+        <StackPanel Grid.Row="1" Margin="32,8,32,32">
+            <TextBlock Text="Lingstrap is discontinued" FontSize="24" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+
+            <TextBlock Margin="0,14,0,0" TextWrapping="Wrap" FontSize="14" LineHeight="21"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       Text="Lingstrap is no longer being developed and can't be used anymore." />
+
+            <TextBlock Margin="0,12,0,0" TextWrapping="Wrap" FontSize="14" LineHeight="21"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       Text="Please switch to PhasmaStrap: a free, open-source Roblox launcher built on Bloxstrap, with per-game FastFlags, an FPS overlay, instant replays, a server browser and more. It's made by a friend of the Lingstrap developer, who has been using it for the past month." />
+
+            <StackPanel Orientation="Horizontal" Margin="0,24,0,0">
+                <ui:Button Content="Open phasmastrap.com" Appearance="Primary" Padding="16,8"
+                           Click="Website_Click" />
+                <ui:Button Content="PhasmaStrap on GitHub" Margin="10,0,0,0" Padding="16,8"
+                           Click="GitHub_Click" />
+            </StackPanel>
+        </StackPanel>
+    </Grid>
+</ui:FluentWindow>

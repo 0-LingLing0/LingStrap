@@ -223,6 +223,13 @@ public partial class App : Application
             : Models.ColorThemeCatalog.Find(SettingsService.Current.AccentTheme);
         ApplicationAccentColorManager.Apply(accent.Base, accent.Light, accent.Base, accent.Dark);
 
+        // Lingstrap is discontinued: every interactive start (the app, the shortcut, a browser launch)
+        // shows only the PhasmaStrap notice. The code below is kept but no longer reached.
+        RemoveStaleExeFromUpdate();
+        new Views.DiscontinuedWindow().Show();
+        return;
+
+#pragma warning disable CS0162 // unreachable - see above
         if (IsRobloxLaunch)
         {
             HandleRobloxLaunch(LaunchArgs[0]);
@@ -242,6 +249,7 @@ public partial class App : Application
 
         RemoveStaleExeFromUpdate();
         StartMainWindowAsync();
+#pragma warning restore CS0162
     }
 
     /// <summary>
